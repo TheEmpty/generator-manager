@@ -2,8 +2,8 @@
     "shore_limit": 15.0,
     "generator": {
       "limit": 45.5,
-      "auto-start-soc": 30,
-      "stop-charge-soc": 80
+      "auto_start_soc": 30,
+      "stop_charge_soc": 80
     },
     "mqtt": {
       "host": "192.168.50.5",
@@ -12,7 +12,7 @@
       "password": "public"
     },
     "topics": {
-      "curret_limit": "{YOUR ID}/vebus/{VE BUS ID}/Ac/ActiveIn/CurrentLimit",
+      "current_limit": "{YOUR ID}/vebus/{VE BUS ID}/Ac/ActiveIn/CurrentLimit",
       "soc": "+/battery/+/Soc"
     },
     "prowl_api_keys": [
