@@ -1,17 +1,29 @@
-FROM rust:1.63-slim-buster
+FROM rust:alpine
 
-RUN apt-get update
-RUN apt-get install -y gcc libssl-dev pkg-config
-RUN mkdir -p /tmp/generator-manager
-COPY src /tmp/generator-manager/src
-COPY Cargo.toml /tmp/generator-manager
+# Packages
+ENV BUILD_PACKAGES "pkgconfig"
+ENV DEP_PACKAGES "gcc openssl-dev musl-dev"
+RUN apk add --no-cache ${BUILD_PACKAGES} ${DEP_PACKAGES}
 
-RUN cd /tmp/generator-manager \
+# Code
+RUN mkdir -p /code
+COPY Cargo.toml /code/.
+COPY src /code/src
+
+# Build vars
+ENV BINARY "generator-manager"
+# Believe this requirement stems from reqwest
+ENV RUSTFLAGS="-Ctarget-feature=-crt-static"
+
+# Compile && Cleanup
+RUN cd /code \
   && cargo build --release --verbose \
-  && cp target/release/generator-manager /opt \
-  && rm -fr /src
+  && cp target/release/${BINARY} /opt/app \
+  && rm -fr /src \
+  && apk --purge del ${BUILD_PACKAGES}
 
-ENV RUST_LOG=generator_manager=debug
+# Runtime env
+ENV RUST_LOG=debug
 ENV RUST_BACKTRACE=1
 
-ENTRYPOINT ["/opt/generator-manager"]
+ENTRYPOINT ["/opt/app"]
