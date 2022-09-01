@@ -26,7 +26,6 @@ function join_tags {
     done
 }
 
-sed -E -i .bak 's/ENV RUST_LOG=.+$/ENV RUST_LOG=debug/' Dockerfile
 docker buildx build --builder ${BUILDX} $(join_tags) --push --platform=${PLATFORMS} .
 git push
 

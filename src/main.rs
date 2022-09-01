@@ -1,12 +1,12 @@
 use lci_gateway::{DeviceType, Generator, GeneratorState, Tank};
-use rumqttc::mqttbytes::v4::Packet;
-use rumqttc::Event::Incoming;
-use rumqttc::{AsyncClient, MqttOptions, QoS};
+use rumqttc::{
+    mqttbytes::v4::Packet,
+    AsyncClient,
+    Event::{Incoming, Outgoing},
+    MqttOptions, QoS,
+};
 use serde::Deserialize;
-use std::fs::File;
-use std::io::BufReader;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{fs::File, io::BufReader, sync::Arc, time::Duration};
 use tokio::sync::Mutex;
 
 #[tokio::main]
@@ -72,7 +72,6 @@ async fn main() {
 
     log::debug!("Starting eventloop poll");
     while let Ok(notification) = eventloop.poll().await {
-        log::trace!("Notification incoming = {:?}", notification);
         // create clones here so ownership of a new arc can move instead of original.
         let config = config.clone();
         let gas_tank = gas_tank.clone();
@@ -153,6 +152,10 @@ async fn handle_notification(
                 log::error!("Error while checking current limit, {:?}", error);
             }
         }
+        Incoming(Packet::PingReq)
+        | Incoming(Packet::PingResp)
+        | Outgoing(rumqttc::Outgoing::PingReq)
+        | Outgoing(rumqttc::Outgoing::PingResp) => {}
         _ => log::trace!("Unused notification = {:?}", notification),
     };
 }
@@ -265,6 +268,7 @@ async fn generator_on(
                 )?;
                 notification.add().await?;
             }
+            return Err(GeneratorOnError::NoGas);
         }
     }
 
@@ -396,6 +400,7 @@ enum GeneratorOnError {
     AddError(prowl::AddError),
     BadState,
     FailedToTurnOn,
+    NoGas,
     SetError(lci_gateway::SetError),
     AcLimitError(AcLimitError),
 }

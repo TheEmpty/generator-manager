@@ -23,7 +23,7 @@ RUN cd /code \
   && apk --purge del ${BUILD_PACKAGES}
 
 # Runtime env
-ENV RUST_LOG=debug
+ENV RUST_LOG=generator_manager=debug
 ENV RUST_BACKTRACE=1
 
 ENTRYPOINT ["/opt/app"]
