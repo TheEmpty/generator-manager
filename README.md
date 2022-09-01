@@ -3,9 +3,20 @@
 This auto starts the generator when it's below "auto-start-soc" until it's "stop-charge-soc". Also adjusts shore or generator limit on the multiplus based on the generator status.
 
 ## Requirements:
-* adjust config
+* adjust config (see config.example.json)
 * It can talk to LCI gateway on [http://192.168.1.4:8080/rest/things/](http://192.168.1.4:8080/rest/things/).
-* You have a Victron MQTT with multiplus
+* You have a generator connected to your LCI system.
+* You have a Victron MQTT endpoint with a multiplus
+
+## _You might also like_
+
+### [LCI Gateway Exporter](https://github.com/TheEmpty/lci-gateway-exporter)
+Requires: LCI gateway available on [http://192.168.1.4:8080/rest/things/](http://192.168.1.4:8080/rest/things/).
+
+Exports the current state of your connected devices. It is designed
+to be used with [Prometheus](https://prometheus.io/) to capture
+the state over time as metrics. And a tool like [Grafana](https://grafana.com/)
+to visualize as charts, text, bars, etc.
 
 ## Kubernetes Example
 
