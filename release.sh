@@ -27,7 +27,12 @@ function join_tags {
 }
 
 docker buildx build --builder ${BUILDX} $(join_tags) --push --platform=${PLATFORMS} .
-git push
 
 kubectl rollout restart deployment/${NAME} || true
 kubectl exec -n registry $(kubectl get po -n registry -l app=registry -o=name) -- bin/registry garbage-collect /etc/docker/registry/config.yml || true
+
+if $(git diff --quiet) ; then
+  git push
+else
+  echo "Dirty git tree, please manually verify and push."
+fi

@@ -7,6 +7,7 @@ use rumqttc::{
 };
 use serde::Deserialize;
 use std::{fs::File, io::BufReader, sync::Arc, time::Duration};
+use thiserror::Error;
 use tokio::sync::Mutex;
 
 #[tokio::main]
@@ -117,7 +118,7 @@ async fn handle_notification(
             let value: serde_json::Value = match serde_json::from_slice(&packet.payload) {
                 Ok(val) => val,
                 Err(e) => {
-                    log::error!("Failed to convert to JSON {:?}", e);
+                    log::error!("Failed to convert to JSON {}", e);
                     return;
                 }
             };
@@ -136,7 +137,7 @@ async fn handle_notification(
                 )
                 .await;
                 if let Err(error) = res {
-                    log::error!("Error while checking SoC, {:?}", error);
+                    log::error!("Error while checking SoC, {}", error);
                 }
             } else if topic == "currentlimit" {
                 let value = value["value"].to_string();
@@ -149,7 +150,7 @@ async fn handle_notification(
             }
 
             if let Err(error) = check_current_limit(config, client, generator, ac_input).await {
-                log::error!("Error while checking current limit, {:?}", error);
+                log::error!("Error while checking current limit, {}", error);
             }
         }
         Incoming(Packet::PingReq)
@@ -219,10 +220,9 @@ async fn generator_off(
     log::info!("Want to turn generator off");
     let mut gen = gen.lock().await;
     log::trace!("Locked generator");
-    let state = gen.state().await;
-    if !matches!(state, Ok(GeneratorState::Running)) {
-        log::warn!("Can't turn off generator since it's not in the running state. It was in the {:?} state.", state);
-        return Err(GeneratorOffError::InvalidState);
+    let state = gen.state().await?;
+    if state != GeneratorState::Running {
+        return Err(GeneratorOffError::InvalidState(state));
     }
 
     set_ac_limit(config, client, 15f32).await?;
@@ -251,12 +251,12 @@ async fn generator_on(
 
     if let Ok(perecentage) = gas_tank.level().await {
         if perecentage.value() == 0 {
-            log::warn!("Not enough gas to run generator even though it's wanted.");
-
-            log::debug!("Taking lock on low_gas_tank_notification");
+            log::trace!("Taking lock on low_gas_tank_notification");
             let mut low_gas_tank_notification = low_gas_tank_notification.lock().await;
-            log::debug!("Lock on low_gas_tank_notification taken");
+            log::trace!("Lock on low_gas_tank_notification taken");
             if !*low_gas_tank_notification {
+                // In case prowl returns an err
+                log::warn!("Not enough gas to run generator even though it's wanted.");
                 *low_gas_tank_notification = true;
                 let notification = prowl::Notification::new(
                     config.prowl_api_keys.clone(),
@@ -275,13 +275,9 @@ async fn generator_on(
     log::trace!("Attempting to take lock for generator as we have fuel.");
     let mut gen = gen.lock().await;
     log::trace!("Lock recieved for turning generator on.");
-    let state = gen.state().await;
-    if !matches!(state, Ok(GeneratorState::Off)) {
-        log::warn!(
-            "Can't turn on generator since it's not in the off state. It was in the {:?} state.",
-            state
-        );
-        return Err(GeneratorOnError::BadState);
+    let state = gen.state().await?;
+    if state != GeneratorState::Off {
+        return Err(GeneratorOnError::InvalidState(state));
     }
 
     log::info!("Sending generator command to start.");
@@ -296,13 +292,9 @@ async fn generator_on(
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
-    let state = gen.state().await;
-    if !matches!(state, Ok(GeneratorState::Running)) {
-        log::error!(
-            "Failed to turn on generator. Expected running, but was {:?}",
-            state
-        );
-        return Err(GeneratorOnError::FailedToTurnOn);
+    let state = gen.state().await?;
+    if state != GeneratorState::Running {
+        return Err(GeneratorOnError::FailedToTurnOn(state));
     }
     tokio::time::sleep(std::time::Duration::from_secs(30)).await;
     set_ac_limit(config, client, 45.5).await?;
@@ -380,33 +372,51 @@ impl Config {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum CheckSocError {
+    #[error("Failed to turn generator on. {0}")]
     GeneratorOn(GeneratorOnError),
+    #[error("Failed to turn generator off. {0}")]
     GeneratorOff(GeneratorOffError),
+    #[error("Failed to parse battery charge. {0}")]
     ParseFloat(std::num::ParseFloatError),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum GeneratorOffError {
+    #[error("Failed to set AC limit. {0}")]
     SetAcLimit(AcLimitError),
-    InvalidState,
+    #[error("Tried to turn off the generator when it was not running, but was {0}")]
+    InvalidState(GeneratorState),
+    #[error("Failed to send to LCI gateway. {0}")]
     SetError(lci_gateway::SetError),
+    #[error("Trouble understanding the LCI gateway. {0}")]
+    GeneratorStateConversionError(lci_gateway::GeneratorStateConversionError),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum GeneratorOnError {
+    #[error("Failed to create prowl notification. {0}")]
     Creation(prowl::CreationError),
+    #[error("Failed to send prowl notification. {0}")]
     AddError(prowl::AddError),
-    BadState,
-    FailedToTurnOn,
+    #[error("Tried to turn on the generator when it was not off, but was {0}")]
+    InvalidState(GeneratorState),
+    #[error("The generator did not start in time after sending the command to the LCI gateway. Expected it to be running, but it was {0}")]
+    FailedToTurnOn(GeneratorState),
+    #[error("No gas available to start generator.")]
     NoGas,
+    #[error("Failed to send to LCI gateway. {0}")]
     SetError(lci_gateway::SetError),
+    #[error("Failed to set AC limit. {0}")]
     AcLimitError(AcLimitError),
+    #[error("Trouble understanding the LCI gateway. {0}")]
+    GeneratorStateConversionError(lci_gateway::GeneratorStateConversionError),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 enum AcLimitError {
+    #[error("Failed to send A/C limit change via mqtt. {0}")]
     RumqttcClientError(rumqttc::ClientError),
 }
 
@@ -467,5 +477,17 @@ impl From<GeneratorOnError> for CheckSocError {
 impl From<std::num::ParseFloatError> for CheckSocError {
     fn from(error: std::num::ParseFloatError) -> Self {
         Self::ParseFloat(error)
+    }
+}
+
+impl From<lci_gateway::GeneratorStateConversionError> for GeneratorOnError {
+    fn from(error: lci_gateway::GeneratorStateConversionError) -> Self {
+        Self::GeneratorStateConversionError(error)
+    }
+}
+
+impl From<lci_gateway::GeneratorStateConversionError> for GeneratorOffError {
+    fn from(error: lci_gateway::GeneratorStateConversionError) -> Self {
+        Self::GeneratorStateConversionError(error)
     }
 }

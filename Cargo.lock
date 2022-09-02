@@ -207,7 +207,7 @@ dependencies = [
 
 [[package]]
 name = "generator-manager"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "env_logger",
  "lci-gateway",
@@ -216,6 +216,7 @@ dependencies = [
  "rumqttc",
  "serde",
  "serde_json",
+ "thiserror",
  "tokio",
 ]
 
@@ -402,15 +403,16 @@ checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "lci-gateway"
-version = "0.8.1"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a3dd906fd643af708105ebd9d86d71c84741e1340ce9fd010b70af429002be8"
+checksum = "09389d99cb2dcf7c1ada856dd92e597746d015d08a5dd1a438a62891da0ce052"
 dependencies = [
  "derive-getters",
  "log",
  "reqwest",
  "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]
@@ -640,12 +642,13 @@ dependencies = [
 
 [[package]]
 name = "prowl"
-version = "0.1.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a27eb6817cba399b23f06109531991441115fcbc956013f6b70c020a2f613bc9"
+checksum = "9582cb0647c17ceb4ab67530d96382fb383249bd34f5080bd241fd20f265907f"
 dependencies = [
  "log",
  "reqwest",
+ "thiserror",
  "urlencoding",
 ]
 
@@ -966,18 +969,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.32"
+version = "1.0.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5f6586b7f764adc0231f4c79be7b920e766bb2f3e51b3661cdb263828f19994"
+checksum = "3d0a539a918745651435ac7db7a18761589a94cd7e94cd56999f828bf73c8a57"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.32"
+version = "1.0.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12bafc5b54507e0149cdf1b145a5d80ab80a90bcd9275df43d4fff68460f6c21"
+checksum = "c251e90f708e16c49a16f4917dc2131e75222b72edfa9cb7f7c58ae56aae0c09"
 dependencies = [
  "proc-macro2",
  "quote",
