@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generator Manager</title>
+    <style>
+        #button {
+            width: 300pt;
+            font-size: 42pt;
+            color: white;
+            border-radius: 20pt;
+            padding: 10pt;
+            cursor: pointer;
+        }
+
+        .generator-override-false {
+            background-color: red;
+        }
+
+        .generator-override-true {
+            background-color: green;
+        }
+
+        .disabled {
+            opacity: 50%;
+        }
+    </style>
+    <script>
+        window.pill = function() {
+            if(document.getElementById("button").classList.toString().indexOf("disabled") == -1) {
+                document.getElementById("button").classList += " disabled";
+                const httpRequest = new XMLHttpRequest();
+                httpRequest.onreadystatechange = () => {
+                    if (httpRequest.readyState === XMLHttpRequest.DONE) {
+                        window.location.reload();
+                    }
+                };
+                var url = '/prevent_start/' + !{{prevent_start}};
+                httpRequest.open('POST', url, true);
+                httpRequest.send();
+            }
+        }
+    </script>
+</head>
+<body>
+    <center>
+        <h2>
+            {{#if prevent_start}}
+                Generator currently NOT allowed.
+            {{else}}
+                Generator currently allowed.
+            {{/if}}
+        </h2>
+        <div id="button" onclick="pill()" class="generator-override-{{prevent_start}}">
+            {{#if prevent_start}}
+                Allow Generator
+            {{else}}
+                Disallow Generator
+            {{/if}}
+        </div>
+    </center>
+</body>
+</html>

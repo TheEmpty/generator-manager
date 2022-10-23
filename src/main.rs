@@ -1,4 +1,9 @@
+#[macro_use]
+extern crate rocket;
+
 use lci_gateway::{DeviceType, Generator, GeneratorState, Tank};
+use rocket::serde::json::Value;
+use rocket_dyn_templates::{context, Template};
 use rumqttc::{
     mqttbytes::v4::Packet,
     AsyncClient,
@@ -6,9 +11,38 @@ use rumqttc::{
     MqttOptions, QoS,
 };
 use serde::Deserialize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{fs::File, io::BufReader, sync::Arc, time::Duration};
 use thiserror::Error;
 use tokio::sync::Mutex;
+
+static PREVENT_START: AtomicBool = AtomicBool::new(false);
+
+#[post("/prevent_start/<desire>")]
+fn set_prevent_start(desire: bool) -> Value {
+    PREVENT_START.store(desire, Ordering::Relaxed);
+    get_prevent_start()
+}
+
+#[get("/prevent_start")]
+fn get_prevent_start() -> Value {
+    let prevent_start = PREVENT_START.load(Ordering::Relaxed);
+    rocket::serde::json::json!({
+        "prevent_start": prevent_start,
+    })
+}
+
+#[get("/metrics")]
+fn metrics() -> Template {
+    let prevent_start = PREVENT_START.load(Ordering::Relaxed);
+    Template::render("metrics", context! {prevent_start: prevent_start})
+}
+
+#[get("/")]
+fn index() -> Template {
+    let prevent_start = PREVENT_START.load(Ordering::Relaxed);
+    Template::render("index", context! {prevent_start: prevent_start})
+}
 
 #[tokio::main]
 async fn main() {
@@ -37,6 +71,18 @@ async fn main() {
     let (client, mut eventloop) = AsyncClient::new(mqttoptions, 10);
     let soc_read_topic = format!("N/{}", config.topics.soc);
     let current_limit_read_topic = format!("N/{}", config.topics.current_limit);
+
+    let rocket = rocket::build()
+        .mount(
+            "/",
+            routes![index, set_prevent_start, get_prevent_start, metrics],
+        )
+        .attach(Template::fairing())
+        .ignite()
+        .await
+        .expect("Failed to ignite")
+        .launch();
+    tokio::spawn(rocket);
 
     client
         .subscribe(soc_read_topic, QoS::AtLeastOnce)
@@ -202,11 +248,13 @@ async fn check_soc(
     let low_bat = soc <= config.generator.auto_start_soc;
     let high_bat = soc >= config.generator.stop_charge_soc;
     let gen_on = matches!(gen.lock().await.state().await, Ok(GeneratorState::Running));
-    log::trace!("soc = {soc}, low_bat = {low_bat}, high_bat = {high_bat}, gen_on = {gen_on}");
+    let prevent_start = PREVENT_START.load(Ordering::Relaxed);
+    log::trace!("soc = {soc}, low_bat = {low_bat}, high_bat = {high_bat}, gen_on = {gen_on}, prevent_start = {prevent_start}");
 
     if gen_on && high_bat {
         generator_off(config, client, gen).await?;
-    } else if !gen_on && low_bat {
+    } else if !gen_on && low_bat && !prevent_start {
+        // TODO: maybe log the prevent_start prevented.
         generator_on(config, client, gen, gas_tank, low_gas_tank_notification).await?;
     }
     Ok(())
