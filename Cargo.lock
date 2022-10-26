@@ -522,6 +522,7 @@ dependencies = [
 name = "generator-manager"
 version = "0.2.0"
 dependencies = [
+ "derive-getters",
  "env_logger",
  "lci-gateway",
  "log",
