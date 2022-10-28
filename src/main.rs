@@ -16,6 +16,7 @@ use rumqttc::{
     AsyncClient,
     Event::{Incoming, Outgoing},
 };
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -24,41 +25,58 @@ async fn main() {
     env_logger::init();
     let config = Arc::new(Mutex::new(Config::load_from_arg()));
     web::launch(config.clone()).await;
-    let (client, mut eventloop) = {
-        let config = config.lock().await;
-        mqtt::setup(&config).await
-    };
     let (generator, gas_tank) = lci::get_generator().await;
 
     // Threading stuff
     let gas_tank = Arc::new(gas_tank);
-    let client = Arc::new(Mutex::new(client));
     let generator = Arc::new(Mutex::new(generator));
     let ac_input = Arc::new(Mutex::new(0f32));
     let low_gas_tank_notification = Arc::new(Mutex::new(false));
+    let control_c = Arc::new(AtomicBool::new(false));
+    let control_c_clone = control_c.clone();
+    ctrlc::set_handler(move || {
+        log::warn!("Control-C recieved. Shutting down.");
+        control_c_clone.store(true, Ordering::Relaxed);
+    })
+    .expect("Error setting Ctrl-C handler");
 
-    log::debug!("Starting eventloop poll");
-    while let Ok(notification) = eventloop.poll().await {
-        // create clones here so ownership of a new arc can move instead of original.
-        let config = config.clone();
-        let gas_tank = gas_tank.clone();
-        let client = client.clone();
-        let generator = generator.clone();
-        let ac_input = ac_input.clone();
-        let low_gas_tank_notification = low_gas_tank_notification.clone();
-        // Spawn in another thread so we don't miss eventloops like ping while waiting which may take minutes.
-        tokio::spawn(async move {
-            handle_notification(
-                config,
-                client,
-                generator,
-                low_gas_tank_notification,
-                ac_input,
-                gas_tank,
-                notification,
-            )
-            .await;
-        });
+    loop {
+        if control_c.load(Ordering::Relaxed) {
+            break;
+        }
+
+        let (client, mut eventloop) = {
+            let config = config.lock().await;
+            mqtt::setup(&config).await
+        };
+        let client = Arc::new(Mutex::new(client));
+        log::debug!("Starting eventloop poll");
+        while let Ok(notification) = eventloop.poll().await {
+            if control_c.load(Ordering::Relaxed) {
+                break;
+            }
+
+            // create clones here so ownership of a new arc can move instead of original.
+            let config = config.clone();
+            let gas_tank = gas_tank.clone();
+            let client = client.clone();
+            let generator = generator.clone();
+            let ac_input = ac_input.clone();
+            let low_gas_tank_notification = low_gas_tank_notification.clone();
+            // Spawn in another thread so we don't miss eventloops like ping while waiting which may take minutes.
+            tokio::spawn(async move {
+                handle_notification(
+                    config,
+                    client,
+                    generator,
+                    low_gas_tank_notification,
+                    ac_input,
+                    gas_tank,
+                    notification,
+                )
+                .await;
+            });
+        }
     }
 }
 
