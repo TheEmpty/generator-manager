@@ -6,7 +6,7 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 pub(crate) async fn check_soc(
-    config: Arc<Config>,
+    config: Arc<Mutex<Config>>,
     client: Arc<Mutex<AsyncClient>>,
     value: String,
     gen: Arc<Mutex<Generator>>,
@@ -15,8 +15,10 @@ pub(crate) async fn check_soc(
 ) -> Result<(), CheckSocError> {
     log::trace!("Handling SoC update");
     let soc: f32 = value.parse()?;
-    let low_bat = soc <= *config.generator().auto_start_soc();
-    let high_bat = soc >= *config.generator().stop_charge_soc();
+    let config_guard = config.clone();
+    let config_guard = config_guard.lock().await;
+    let low_bat = soc <= *config_guard.generator().auto_start_soc();
+    let high_bat = soc >= *config_guard.generator().stop_charge_soc();
     let gen_on = matches!(gen.lock().await.state().await, Ok(GeneratorState::Running));
     let prevent_start = crate::web::prevent_start();
     log::trace!("soc = {soc}, low_bat = {low_bat}, high_bat = {high_bat}, gen_on = {gen_on}, prevent_start = {prevent_start}");
@@ -31,7 +33,7 @@ pub(crate) async fn check_soc(
 }
 
 async fn turn_off(
-    config: Arc<Config>,
+    config: Arc<Mutex<Config>>,
     client: Arc<Mutex<AsyncClient>>,
     gen: Arc<Mutex<Generator>>,
 ) -> Result<(), GeneratorOffError> {
@@ -59,7 +61,7 @@ async fn turn_off(
 }
 
 async fn turn_on(
-    config: Arc<Config>,
+    config: Arc<Mutex<Config>>,
     client: Arc<Mutex<AsyncClient>>,
     gen: Arc<Mutex<Generator>>,
     gas_tank: Arc<Tank>,
@@ -77,7 +79,7 @@ async fn turn_on(
                 log::warn!("Not enough gas to run generator even though it's wanted.");
                 *low_gas_tank_notification = true;
                 let notification = prowl::Notification::new(
-                    config.prowl_api_keys().clone(),
+                    config.lock().await.prowl_api_keys().clone(),
                     Some(prowl::Priority::Emergency),
                     None, // link
                     "Generator".to_string(),

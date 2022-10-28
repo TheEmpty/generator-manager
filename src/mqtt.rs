@@ -35,14 +35,14 @@ pub(crate) async fn setup(config: &Config) -> (AsyncClient, EventLoop) {
 }
 
 pub(crate) async fn set_ac_limit(
-    config: Arc<Config>,
+    config: Arc<Mutex<Config>>,
     client: Arc<Mutex<AsyncClient>>,
     limit: f32,
 ) -> Result<(), AcLimitError> {
     log::trace!("Setting ac limit to {limit}");
     let payload = format!("{{\"value\": {:.1}}}", limit);
     log::trace!("Sending ac limit payload = {payload}");
-    let topic = format!("W/{}", config.topics().current_limit());
+    let topic = format!("W/{}", config.lock().await.topics().current_limit());
     client
         .lock()
         .await
@@ -58,7 +58,7 @@ pub(crate) async fn set_ac_limit(
 }
 
 pub(crate) async fn check_current_limit(
-    config: Arc<Config>,
+    config: Arc<Mutex<Config>>,
     client: Arc<Mutex<AsyncClient>>,
     gen: Arc<Mutex<Generator>>,
     ac_input: Arc<Mutex<f32>>,
@@ -69,17 +69,20 @@ pub(crate) async fn check_current_limit(
     let gen = gen.lock().await;
     let ac_input = ac_input.lock().await;
     log::trace!("Received generator and ac_input lock in check_current_limit");
+    let config_guard = config.clone();
+    let config_guard = config_guard.lock().await;
     let desired = match gen.state().await {
-        Ok(GeneratorState::Running) => Some(config.generator().limit()),
-        Ok(GeneratorState::Off) => Some(config.shore_limit()),
+        Ok(GeneratorState::Running) => Some(config_guard.generator().limit()),
+        Ok(GeneratorState::Off) => Some(config_guard.shore_limit()),
         Ok(GeneratorState::Priming) | Ok(GeneratorState::Starting) | Err(_) => None,
     };
+
     log::trace!("Desired AC limit = {:?}, actual = {ac_input}", desired);
 
     if let Some(desired) = desired {
         if *ac_input != *desired {
             log::debug!("Setting ac limit to {desired}, was at {ac_input}");
-            set_ac_limit(config.clone(), client, *desired).await?;
+            set_ac_limit(config, client, *desired).await?;
         }
     }
     Ok(())

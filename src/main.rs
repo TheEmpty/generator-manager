@@ -22,9 +22,12 @@ use tokio::sync::Mutex;
 #[tokio::main]
 async fn main() {
     env_logger::init();
-    let config = Arc::new(Config::load_from_arg());
-    web::launch().await;
-    let (client, mut eventloop) = mqtt::setup(&config).await;
+    let config = Arc::new(Mutex::new(Config::load_from_arg()));
+    web::launch(config.clone()).await;
+    let (client, mut eventloop) = {
+        let config = config.lock().await;
+        mqtt::setup(&config).await
+    };
     let (generator, gas_tank) = lci::get_generator().await;
 
     // Threading stuff
@@ -60,7 +63,7 @@ async fn main() {
 }
 
 async fn handle_notification(
-    config: Arc<Config>,
+    config: Arc<Mutex<Config>>,
     client: Arc<Mutex<AsyncClient>>,
     generator: Arc<Mutex<Generator>>,
     low_gas_tank_notification: Arc<Mutex<bool>>,

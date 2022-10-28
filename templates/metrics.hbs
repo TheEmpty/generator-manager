@@ -1,3 +1,7 @@
-# HELP prevent_start If the generator override is applied
+# HELP prevent_start If the generator override is applied. 1 if override is on, 0 if off.
 # TYPE prevent_start gauge
 prevent_start {{#if prevent_start}}1{{else}}0{{/if}}
+
+# HELP auto_shore_limit The current shore limit that generator_manager will set when the generator is off.
+# TYPE auto_shore_limit gauge
+auto_shore_limit {{shore_limit}}

@@ -53,4 +53,8 @@ impl Config {
         };
         Config::load(config_file)
     }
+
+    pub(crate) fn set_shore_limit(&mut self, new_shore_limit: u8) {
+        self.shore_limit = new_shore_limit.into();
+    }
 }

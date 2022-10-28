@@ -3,7 +3,7 @@
 <head>
     <title>Generator Manager</title>
     <style>
-        #button {
+        #prevent-start {
             width: 300pt;
             font-size: 42pt;
             color: white;
@@ -23,20 +23,61 @@
         .disabled {
             opacity: 50%;
         }
+
+        #current-limit-div {
+            font-size: 42pt;
+            padding-top: 42pt;
+        }
+
+        #current-limit {
+            font-size: 42pt;
+            width: 50pt;
+            text-align: right;
+            -webkit-appearance: none;
+            -moz-appearance: textfield;
+        }
+
+        #submit-current-limit {
+            font-size: 25pt;
+        }
     </style>
     <script>
-        window.pill = function() {
-            if(document.getElementById("button").classList.toString().indexOf("disabled") == -1) {
-                document.getElementById("button").classList += " disabled";
-                const httpRequest = new XMLHttpRequest();
-                httpRequest.onreadystatechange = () => {
-                    if (httpRequest.readyState === XMLHttpRequest.DONE) {
-                        window.location.reload();
-                    }
-                };
+
+        function disabled() {
+            return document.getElementById("prevent-start").classList.toString().indexOf("disabled") != -1;
+        }
+
+        function disable() {
+            document.getElementById("prevent-start").classList += " disabled";
+            document.getElementById("submit-current-limit").disabled = "disabled";
+        }
+
+        function post(url) {
+            const httpRequest = new XMLHttpRequest();
+            httpRequest.onreadystatechange = () => {
+                if (httpRequest.readyState === XMLHttpRequest.DONE) {
+                    window.location = window.location;
+                }
+            };
+
+            httpRequest.open('POST', url, true);
+            httpRequest.send();
+        }
+
+        window.override = function() {
+            if(!disabled()) {
+                disable();
                 var url = '/prevent_start/' + !{{prevent_start}};
-                httpRequest.open('POST', url, true);
-                httpRequest.send();
+                post(url);
+            }
+        }
+
+        window.setCurrentLimit = function() {
+            if(!disabled()) {
+                disable();
+                var new_limit = document.getElementById("current-limit").value;
+                var url = '/shore_limit/' + new_limit;
+                post(url);
             }
         }
     </script>
@@ -50,12 +91,18 @@
                 Generator currently allowed.
             {{/if}}
         </h2>
-        <div id="button" onclick="pill()" class="generator-override-{{prevent_start}}">
+        <div id="prevent-start" onclick="override()" class="generator-override-{{prevent_start}}">
             {{#if prevent_start}}
                 Allow Generator
             {{else}}
                 Disallow Generator
             {{/if}}
+        </div>
+        <div id="current-limit-div">
+            Shore current limit of
+            <input type="number" id="current-limit" value="{{shore_limit}}" min="1" max="99">
+            Amps.<br>
+            <input type="button" id="submit-current-limit" value="Update shore limit" onclick="setCurrentLimit()">
         </div>
     </center>
 </body>
