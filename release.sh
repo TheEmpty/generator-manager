@@ -10,7 +10,7 @@ USER="theempty"
 NAME="generator-manager"
 VERSION=$(sed -E -n 's/^version = "([0-9\.]+)"/\1/p' Cargo.toml)
 BUILDX="pensive_albattani"
-PLATFORMS="linux/amd64,linux/arm64"
+PLATFORMS="linux/amd64"
 
 echo "Building for release, ${NAME}:${VERSION}"
 
