@@ -23,6 +23,12 @@ use tokio::{sync::Mutex, task::JoinHandle};
 #[tokio::main]
 async fn main() {
     env_logger::init();
+    log::debug!(
+        "Built v{} on {} compiled with {}.",
+        env!("CARGO_PKG_VERSION"),
+        env!("DATE_TIME"),
+        env!("RUSTC_VERSION")
+    );
     let config = Arc::new(Mutex::new(Config::load_from_arg()));
     web::launch(config.clone()).await;
     let (generator, gas_tank) = lci::get_generator().await;
@@ -132,8 +138,9 @@ async fn handle_notification(
             } else if topic == "currentlimit" {
                 let value = value["value"].to_string();
                 if let Ok(val) = value.parse() {
-                    log::trace!("Updated ac_input from {val}");
+                    log::trace!("Updating ac_input from {val}");
                     *ac_input.lock().await = round_to_half(val);
+                    log::trace!("Updated ac_input from {val}");
                 } else {
                     log::error!("Failed to parse {value} to f32");
                 }
@@ -159,12 +166,15 @@ fn start_refresh_thread(
     tokio::spawn(async move {
         log::trace!("Starting refresh thread.");
         loop {
+            log::trace!("refresh: Start");
             if let Err(e) = mqtt::refresh_topics(config.clone(), client.clone()).await {
                 log::warn!("Failure refreshing topics. {e}");
             } else {
                 log::trace!("Refresh succeeded");
             };
+            log::trace!("refresh: Wait");
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            log::trace!("refresh: Loop");
         }
     })
 }

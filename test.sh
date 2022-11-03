@@ -2,6 +2,10 @@
 
 set -ex
 
+# for local builds before buildx
+export RUSTC_VERSION="$(rustc -V)"
+export DATE_TIME="$(date -u)"
+
 cargo fmt
 cargo clippy -- -D warnings
 cargo build

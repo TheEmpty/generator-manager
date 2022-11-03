@@ -37,7 +37,8 @@ fn get_prevent_start() -> Value {
 async fn metrics(config: &State<Arc<Mutex<Config>>>) -> Template {
     let prevent_start = PREVENT_START.load(Ordering::Relaxed);
     let config = config.lock().await;
-    let shore_limit = config.shore_limit();
+    let shore_limit = *config.shore_limit();
+    drop(config);
     Template::render(
         "metrics",
         context! {
@@ -51,7 +52,8 @@ async fn metrics(config: &State<Arc<Mutex<Config>>>) -> Template {
 async fn index(config: &State<Arc<Mutex<Config>>>) -> Template {
     let prevent_start = PREVENT_START.load(Ordering::Relaxed);
     let config = config.lock().await;
-    let shore_limit = config.shore_limit();
+    let shore_limit = *config.shore_limit();
+    drop(config);
     Template::render(
         "index",
         context! {

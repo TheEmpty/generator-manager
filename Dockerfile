@@ -14,10 +14,12 @@ COPY templates /templates
 # Build vars
 ENV BINARY "generator-manager"
 # Believe this requirement stems from reqwest
-ENV RUSTFLAGS="-Ctarget-feature=-crt-static"
+ENV RUSTFLAGS "-Ctarget-feature=-crt-static"
 
 # Compile && Cleanup
 RUN cd /code \
+  && export RUSTC_VERSION="$(rustc -V)" \
+  && export DATE_TIME="$(date -u)" \
   && cargo build --release --verbose \
   && cp target/release/${BINARY} /opt/app \
   && rm -fr /code \

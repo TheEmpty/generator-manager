@@ -42,6 +42,7 @@ pub(crate) async fn set_ac_limit(
     log::trace!("Setting ac limit to {limit}");
     let payload = format!("{{\"value\": {:.1}}}", limit);
     log::trace!("Sending ac limit payload = {payload}");
+    log::trace!("Locking to get current_limit topic.");
     let topic = format!("W/{}", config.lock().await.topics().current_limit());
     client
         .lock()
@@ -61,6 +62,7 @@ pub(crate) async fn refresh_topics(
     config: Arc<Mutex<Config>>,
     client: Arc<Mutex<AsyncClient>>,
 ) -> Result<(), rumqttc::ClientError> {
+    log::trace!("Waiting for lock on config to get topics");
     let current_limit_topic = format!("R/{}", config.lock().await.topics().current_limit());
     let soc_topic = format!("R/{}", config.lock().await.topics().soc());
     let topics = vec![current_limit_topic, soc_topic];
@@ -79,6 +81,7 @@ pub(crate) async fn refresh_topics(
             .await?;
     }
 
+    log::trace!("All topics have been refreshed.");
     Ok(())
 }
 
@@ -95,19 +98,22 @@ pub(crate) async fn check_current_limit(
     let ac_input = ac_input.lock().await;
     log::trace!("Received generator and ac_input lock in check_current_limit");
     let config_guard = config.clone();
+    log::trace!("Taking config lock");
     let config_guard = config_guard.lock().await;
     let desired = match gen.state().await {
-        Ok(GeneratorState::Running) => Some(config_guard.generator().limit()),
-        Ok(GeneratorState::Off) => Some(config_guard.shore_limit()),
+        Ok(GeneratorState::Running) => Some(*config_guard.generator().limit()),
+        Ok(GeneratorState::Off) => Some(*config_guard.shore_limit()),
         Ok(GeneratorState::Priming) | Ok(GeneratorState::Starting) | Err(_) => None,
     };
+    log::trace!("Releasing config lock");
+    drop(config_guard);
 
     log::trace!("Desired AC limit = {:?}, actual = {ac_input}", desired);
 
     if let Some(desired) = desired {
-        if *ac_input != *desired {
+        if *ac_input != desired {
             log::debug!("Setting ac limit to {desired}, was at {ac_input}");
-            set_ac_limit(config, client, *desired).await?;
+            set_ac_limit(config, client, desired).await?;
         }
     }
     Ok(())
