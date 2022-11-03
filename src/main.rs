@@ -18,7 +18,7 @@ use rumqttc::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::{sync::Mutex, task::JoinHandle};
 
 #[tokio::main]
 async fn main() {
@@ -51,6 +51,9 @@ async fn main() {
         };
         let client = Arc::new(Mutex::new(client));
         log::debug!("Starting eventloop poll");
+
+        let refresh_task = start_refresh_thread(config.clone(), client.clone());
+
         while let Ok(notification) = eventloop.poll().await {
             if control_c.load(Ordering::Relaxed) {
                 break;
@@ -77,6 +80,8 @@ async fn main() {
                 .await;
             });
         }
+
+        refresh_task.abort();
     }
 }
 
@@ -89,6 +94,7 @@ async fn handle_notification(
     gas_tank: Arc<Tank>,
     notification: rumqttc::Event,
 ) {
+    log::trace!("Handle notification entry for {:?}", notification);
     match notification {
         Incoming(Packet::Publish(packet)) => {
             let topic = match packet.topic.split('/').last() {
@@ -111,7 +117,7 @@ async fn handle_notification(
 
             if topic == "soc" {
                 let value = value["value"].to_string();
-                let res = generator::check_soc(
+                if let Err(error) = generator::check_soc(
                     config.clone(),
                     client.clone(),
                     value,
@@ -119,8 +125,8 @@ async fn handle_notification(
                     gas_tank,
                     low_gas_tank_notification,
                 )
-                .await;
-                if let Err(error) = res {
+                .await
+                {
                     log::error!("Error while checking SoC, {}", error);
                 }
             } else if topic == "currentlimit" {
@@ -144,6 +150,23 @@ async fn handle_notification(
         | Outgoing(rumqttc::Outgoing::PingResp) => {}
         _ => log::trace!("Unused notification = {:?}", notification),
     };
+}
+
+fn start_refresh_thread(
+    config: Arc<Mutex<Config>>,
+    client: Arc<Mutex<AsyncClient>>,
+) -> JoinHandle<()> {
+    tokio::spawn(async move {
+        log::trace!("Starting refresh thread.");
+        loop {
+            if let Err(e) = mqtt::refresh_topics(config.clone(), client.clone()).await {
+                log::warn!("Failure refreshing topics. {e}");
+            } else {
+                log::trace!("Refresh succeeded");
+            };
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        }
+    })
 }
 
 fn round_to_half(mut a: f32) -> f32 {

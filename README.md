@@ -72,7 +72,7 @@ data:
         },
         "topics": {
             "current_limit": "{YOUR ID}/vebus/{VE BUS ID}/Ac/ActiveIn/CurrentLimit",
-            "soc": "+/battery/+/Soc"
+            "soc": "{YOUR ID}/battery/{BATTERY ID}/Soc"
         },
         "prowl_api_keys": [
             "REPLACE WITH YOURS"

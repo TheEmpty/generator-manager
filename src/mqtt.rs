@@ -57,6 +57,31 @@ pub(crate) async fn set_ac_limit(
     Ok(())
 }
 
+pub(crate) async fn refresh_topics(
+    config: Arc<Mutex<Config>>,
+    client: Arc<Mutex<AsyncClient>>,
+) -> Result<(), rumqttc::ClientError> {
+    let current_limit_topic = format!("R/{}", config.lock().await.topics().current_limit());
+    let soc_topic = format!("R/{}", config.lock().await.topics().soc());
+    let topics = vec![current_limit_topic, soc_topic];
+    log::trace!("Refreshing topics, {:?}", topics);
+
+    for topic in topics {
+        client
+            .lock()
+            .await
+            .publish(
+                topic,
+                QoS::AtLeastOnce,
+                false, // retain
+                "please",
+            )
+            .await?;
+    }
+
+    Ok(())
+}
+
 pub(crate) async fn check_current_limit(
     config: Arc<Mutex<Config>>,
     client: Arc<Mutex<AsyncClient>>,
