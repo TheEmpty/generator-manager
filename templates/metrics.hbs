@@ -5,3 +5,7 @@ prevent_start {{#if prevent_start}}1{{else}}0{{/if}}
 # HELP auto_shore_limit The current shore limit that generator_manager will set when the generator is off.
 # TYPE auto_shore_limit gauge
 auto_shore_limit {{shore_limit}}
+
+# HELP generator_wanted If the generator is wanted by the SoC configuration.
+# TYPE generator_wanted gauge
+generator_wanted {{#if generator_wanted}}1{{else}}0{{/if}}

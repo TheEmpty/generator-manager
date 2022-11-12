@@ -21,18 +21,6 @@ impl From<lci_gateway::SetError> for GeneratorOffError {
     }
 }
 
-impl From<prowl::CreationError> for GeneratorOnError {
-    fn from(error: prowl::CreationError) -> Self {
-        Self::Creation(error)
-    }
-}
-
-impl From<prowl::AddError> for GeneratorOnError {
-    fn from(error: prowl::AddError) -> Self {
-        Self::AddError(error)
-    }
-}
-
 impl From<lci_gateway::SetError> for GeneratorOnError {
     fn from(error: lci_gateway::SetError) -> Self {
         Self::SetError(error)

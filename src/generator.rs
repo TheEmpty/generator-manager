@@ -1,9 +1,18 @@
 use crate::{config::Config, mqtt, mqtt::AcLimitError};
 use lci_gateway::{Generator, GeneratorState, Tank};
 use rumqttc::AsyncClient;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use thiserror::Error;
 use tokio::sync::Mutex;
+
+static GENERATOR_WANTED: AtomicBool = AtomicBool::new(false);
+
+pub(crate) fn generator_wanted() -> bool {
+    GENERATOR_WANTED.load(Ordering::Relaxed)
+}
 
 pub(crate) async fn check_soc(
     config: Arc<Mutex<Config>>,
@@ -11,7 +20,6 @@ pub(crate) async fn check_soc(
     value: String,
     gen: Arc<Mutex<Generator>>,
     gas_tank: Arc<Tank>,
-    low_gas_tank_notification: Arc<Mutex<bool>>,
 ) -> Result<(), CheckSocError> {
     log::trace!("Handling SoC update");
     let soc: f32 = value.parse()?;
@@ -26,11 +34,15 @@ pub(crate) async fn check_soc(
     let prevent_start = crate::web::prevent_start();
     log::trace!("soc = {soc}, low_bat = {low_bat}, high_bat = {high_bat}, gen_on = {gen_on}, prevent_start = {prevent_start}");
 
+    // TODO: and amps make sense
     if gen_on && high_bat {
+        GENERATOR_WANTED.store(false, Ordering::Relaxed);
         turn_off(config, client, gen).await?;
     } else if !gen_on && low_bat && !prevent_start {
-        // TODO: maybe log the prevent_start prevented.
-        turn_on(config, client, gen, gas_tank, low_gas_tank_notification).await?;
+        GENERATOR_WANTED.store(true, Ordering::Relaxed);
+        if !prevent_start {
+            turn_on(config, client, gen, gas_tank).await?;
+        }
     }
     Ok(())
 }
@@ -68,29 +80,11 @@ async fn turn_on(
     client: Arc<Mutex<AsyncClient>>,
     gen: Arc<Mutex<Generator>>,
     gas_tank: Arc<Tank>,
-    low_gas_tank_notification: Arc<Mutex<bool>>,
 ) -> Result<(), GeneratorOnError> {
     log::info!("Generator is wanted. Checking conditions.");
 
     if let Ok(perecentage) = gas_tank.level().await {
         if perecentage.value() == 0 {
-            log::trace!("Taking lock on low_gas_tank_notification");
-            let mut low_gas_tank_notification = low_gas_tank_notification.lock().await;
-            log::trace!("Lock on low_gas_tank_notification taken");
-            if !*low_gas_tank_notification {
-                // In case prowl returns an err
-                log::warn!("Not enough gas to run generator even though it's wanted.");
-                *low_gas_tank_notification = true;
-                let notification = prowl::Notification::new(
-                    config.lock().await.prowl_api_keys().clone(),
-                    Some(prowl::Priority::Emergency),
-                    None, // link
-                    "Generator".to_string(),
-                    "No Fuel".to_string(),
-                    "Not enough gas to run generator even though it's wanted.".to_string(),
-                )?;
-                notification.add().await?;
-            }
             return Err(GeneratorOnError::NoGas);
         }
     }
@@ -126,10 +120,6 @@ async fn turn_on(
 
 #[derive(Debug, Error)]
 pub(crate) enum GeneratorOnError {
-    #[error("Failed to create prowl notification. {0}")]
-    Creation(prowl::CreationError),
-    #[error("Failed to send prowl notification. {0}")]
-    AddError(prowl::AddError),
     #[error("Tried to turn on the generator when it was not off, but was {0}")]
     InvalidState(GeneratorState),
     #[error("The generator did not start in time after sending the command to the LCI gateway. Expected it to be running, but it was {0}")]

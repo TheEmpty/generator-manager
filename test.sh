@@ -19,5 +19,7 @@ PLATFORMS="linux/amd64"
 
 docker buildx build --builder ${BUILDX} -t ${TEST_REPO}/${USER}/${NAME} --push --platform=${PLATFORMS} .
 kubectl rollout restart deployment/${NAME}
-sleep 45
+say "deploying" || true
+sleep 90
 kubectl logs -l app=${NAME}
+

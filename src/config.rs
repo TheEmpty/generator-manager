@@ -26,7 +26,6 @@ pub(crate) struct GeneratorConfig {
 #[derive(Deserialize, Getters)]
 pub(crate) struct Config {
     shore_limit: f32,
-    prowl_api_keys: Vec<String>,
     mqtt: MqttCredentials,
     topics: MqttTopics,
     generator: GeneratorConfig,

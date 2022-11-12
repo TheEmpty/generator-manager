@@ -36,6 +36,7 @@ fn get_prevent_start() -> Value {
 #[get("/metrics")]
 async fn metrics(config: &State<Arc<Mutex<Config>>>) -> Template {
     let prevent_start = PREVENT_START.load(Ordering::Relaxed);
+    let generator_wanted = crate::generator::generator_wanted();
     let config = config.lock().await;
     let shore_limit = *config.shore_limit();
     drop(config);
@@ -43,6 +44,7 @@ async fn metrics(config: &State<Arc<Mutex<Config>>>) -> Template {
         "metrics",
         context! {
             prevent_start: prevent_start,
+            generator_wanted: generator_wanted,
             shore_limit: shore_limit
         },
     )

@@ -37,7 +37,6 @@ async fn main() {
     let gas_tank = Arc::new(gas_tank);
     let generator = Arc::new(Mutex::new(generator));
     let ac_input = Arc::new(Mutex::new(0f32));
-    let low_gas_tank_notification = Arc::new(Mutex::new(false));
     let control_c = Arc::new(AtomicBool::new(false));
     let control_c_clone = control_c.clone();
     ctrlc::set_handler(move || {
@@ -71,19 +70,10 @@ async fn main() {
             let client = client.clone();
             let generator = generator.clone();
             let ac_input = ac_input.clone();
-            let low_gas_tank_notification = low_gas_tank_notification.clone();
             // Spawn in another thread so we don't miss eventloops like ping while waiting which may take minutes.
             tokio::spawn(async move {
-                handle_notification(
-                    config,
-                    client,
-                    generator,
-                    low_gas_tank_notification,
-                    ac_input,
-                    gas_tank,
-                    notification,
-                )
-                .await;
+                handle_notification(config, client, generator, ac_input, gas_tank, notification)
+                    .await;
             });
         }
 
@@ -95,7 +85,6 @@ async fn handle_notification(
     config: Arc<Mutex<Config>>,
     client: Arc<Mutex<AsyncClient>>,
     generator: Arc<Mutex<Generator>>,
-    low_gas_tank_notification: Arc<Mutex<bool>>,
     ac_input: Arc<Mutex<f32>>,
     gas_tank: Arc<Tank>,
     notification: rumqttc::Event,
@@ -129,7 +118,6 @@ async fn handle_notification(
                     value,
                     generator.clone(),
                     gas_tank,
-                    low_gas_tank_notification,
                 )
                 .await
                 {
