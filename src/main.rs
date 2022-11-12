@@ -101,7 +101,7 @@ async fn handle_notification(
             };
 
             let value: serde_json::Value = match serde_json::from_slice(&packet.payload) {
-                Ok(val) => val,  
+                Ok(val) => val,
                 Err(e) => {
                     log::error!("Failed to convert to JSON {}", e);
                     return;

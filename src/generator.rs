@@ -48,11 +48,11 @@ pub(crate) async fn check_soc(
     let soc: f32 = value.parse()?;
     let low_bat = soc <= *config_guard.generator().auto_start_soc();
     let high_bat = soc >= *config_guard.generator().stop_charge_soc();
+    let prevent_start = *config_guard.prevent_start();
     drop(config_guard);
 
     log::trace!("Released config lock");
     let gen_on = matches!(gen.lock().await.state().await, Ok(GeneratorState::Running));
-    let prevent_start = crate::web::prevent_start();
     log::trace!("soc = {soc}, low_bat = {low_bat}, high_bat = {high_bat}, gen_on = {gen_on}, prevent_start = {prevent_start}");
 
     if gen_on && high_bat {

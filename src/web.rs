@@ -1,33 +1,46 @@
 use crate::config::Config;
 use rocket::{serde::json::Value, State};
 use rocket_dyn_templates::{context, Template};
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
-static PREVENT_START: AtomicBool = AtomicBool::new(false);
-
 #[post("/prevent_start/<desire>")]
-fn set_prevent_start(desire: bool) -> Value {
-    PREVENT_START.store(desire, Ordering::Relaxed);
-    get_prevent_start()
+async fn set_prevent_start(config: &State<Arc<Mutex<Config>>>, desire: bool) -> Value {
+    let mut config = config.lock().await;
+    config.set_prevent_start(desire);
+    let save_result = config.save();
+    if let Err(ref error) = save_result {
+        log::debug!("{}", error);
+    }
+    drop(config);
+    rocket::serde::json::json!({
+        "success": "true",
+        "prevent_start": desire,
+        "saved": save_result.is_err(),
+    })
 }
 
 #[post("/shore_limit/<new_limit>")]
 async fn set_shore_limit(config: &State<Arc<Mutex<Config>>>, new_limit: u8) -> Value {
     let mut config = config.lock().await;
     config.set_shore_limit(new_limit);
+    let save_result = config.save();
+    if let Err(ref error) = save_result {
+        log::debug!("{}", error);
+    }
     drop(config);
     rocket::serde::json::json!({
-        "success": true,
+        "success": "true",
+        "shore_limit": new_limit,
+        "saved": save_result.is_err(),
     })
 }
 
 #[get("/prevent_start")]
-fn get_prevent_start() -> Value {
-    let prevent_start = PREVENT_START.load(Ordering::Relaxed);
+async fn get_prevent_start(config: &State<Arc<Mutex<Config>>>) -> Value {
+    let config = config.lock().await;
+    let prevent_start = *config.prevent_start();
+    drop(config);
     rocket::serde::json::json!({
         "prevent_start": prevent_start,
     })
@@ -35,11 +48,11 @@ fn get_prevent_start() -> Value {
 
 #[get("/metrics")]
 async fn metrics(config: &State<Arc<Mutex<Config>>>) -> Template {
-    let prevent_start = PREVENT_START.load(Ordering::Relaxed);
     let generator_wanted = crate::generator::generator_wanted();
     let shore_available = crate::generator::shore_available();
     let config = config.lock().await;
     let shore_limit = *config.shore_limit();
+    let prevent_start = *config.prevent_start();
     drop(config);
     Template::render(
         "metrics",
@@ -54,9 +67,9 @@ async fn metrics(config: &State<Arc<Mutex<Config>>>) -> Template {
 
 #[get("/")]
 async fn index(config: &State<Arc<Mutex<Config>>>) -> Template {
-    let prevent_start = PREVENT_START.load(Ordering::Relaxed);
     let config = config.lock().await;
     let shore_limit = *config.shore_limit();
+    let prevent_start = *config.prevent_start();
     drop(config);
     Template::render(
         "index",
@@ -86,8 +99,4 @@ pub(crate) async fn launch(config: Arc<Mutex<Config>>) {
         .expect("Failed to ignite")
         .launch();
     tokio::spawn(rocket);
-}
-
-pub(crate) fn prevent_start() -> bool {
-    PREVENT_START.load(Ordering::Relaxed)
 }
