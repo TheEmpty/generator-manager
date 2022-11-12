@@ -21,11 +21,18 @@ pub(crate) async fn check_soc(
     gen: Arc<Mutex<Generator>>,
     gas_tank: Arc<Tank>,
 ) -> Result<(), CheckSocError> {
+    log::trace!("Locking on config");
+    let config_guard = config.clone();
+    let config_guard = config_guard.lock().await;
+    // TODO: check if shore is available too
+    let generator_is_better_than_shore =
+        *config_guard.generator().limit() > *config_guard.shore_limit();
+    if !generator_is_better_than_shore {
+        log::trace!("short circuting since generator limit is lower than shore limit");
+        return Ok(());
+    }
     log::trace!("Handling SoC update");
     let soc: f32 = value.parse()?;
-    let config_guard = config.clone();
-    log::trace!("Locking on config");
-    let config_guard = config_guard.lock().await;
     let low_bat = soc <= *config_guard.generator().auto_start_soc();
     let high_bat = soc >= *config_guard.generator().stop_charge_soc();
     drop(config_guard);
