@@ -20,6 +20,7 @@ pub(crate) async fn setup(config: &Config) -> (AsyncClient, EventLoop) {
     let (client, eventloop) = AsyncClient::new(mqttoptions, 10);
     let soc_read_topic = format!("N/{}", config.topics().soc());
     let current_limit_read_topic = format!("N/{}", config.topics().current_limit());
+    let shore_connected_read_topic = format!("N/{}", config.topics().shore_connected());
 
     client
         .subscribe(soc_read_topic, QoS::AtLeastOnce)
@@ -30,6 +31,11 @@ pub(crate) async fn setup(config: &Config) -> (AsyncClient, EventLoop) {
         .subscribe(current_limit_read_topic, QoS::AtLeastOnce)
         .await
         .expect("Failed to subscribe to AC CurrentLimit requested state");
+
+    client
+        .subscribe(shore_connected_read_topic, QoS::AtLeastOnce)
+        .await
+        .expect("Failed to subscribe to AC shore connected requested state");
 
     (client, eventloop)
 }
@@ -65,7 +71,8 @@ pub(crate) async fn refresh_topics(
     log::trace!("Waiting for lock on config to get topics");
     let current_limit_topic = format!("R/{}", config.lock().await.topics().current_limit());
     let soc_topic = format!("R/{}", config.lock().await.topics().soc());
-    let topics = vec![current_limit_topic, soc_topic];
+    let shore_connected_topic = format!("R/{}", config.lock().await.topics().shore_connected());
+    let topics = vec![current_limit_topic, soc_topic, shore_connected_topic];
     log::trace!("Refreshing topics, {:?}", topics);
 
     for topic in topics {

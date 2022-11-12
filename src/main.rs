@@ -101,7 +101,7 @@ async fn handle_notification(
             };
 
             let value: serde_json::Value = match serde_json::from_slice(&packet.payload) {
-                Ok(val) => val,
+                Ok(val) => val,  
                 Err(e) => {
                     log::error!("Failed to convert to JSON {}", e);
                     return;
@@ -131,6 +131,11 @@ async fn handle_notification(
                     log::trace!("Updated ac_input from {val}");
                 } else {
                     log::error!("Failed to parse {value} to f32");
+                }
+            } else if topic == "connected" {
+                let value = value["value"].to_string();
+                if let Err(error) = generator::check_shore_available(value) {
+                    log::error!("Error while updating shore connection state, {}", error);
                 }
             }
 

@@ -9,9 +9,20 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 static GENERATOR_WANTED: AtomicBool = AtomicBool::new(false);
+static SHORE_AVAILABLE: AtomicBool = AtomicBool::new(false);
 
 pub(crate) fn generator_wanted() -> bool {
     GENERATOR_WANTED.load(Ordering::Relaxed)
+}
+
+pub(crate) fn shore_available() -> bool {
+    SHORE_AVAILABLE.load(Ordering::Relaxed)
+}
+
+pub(crate) fn check_shore_available(value: String) -> Result<(), CheckShoreError> {
+    let available: f32 = value.parse().map_err(CheckShoreError::ParseFloat)?;
+    SHORE_AVAILABLE.store(available != 0.0, Ordering::Relaxed);
+    Ok(())
 }
 
 pub(crate) async fn check_soc(
@@ -24,24 +35,26 @@ pub(crate) async fn check_soc(
     log::trace!("Locking on config");
     let config_guard = config.clone();
     let config_guard = config_guard.lock().await;
-    // TODO: check if shore is available too
+
     let generator_is_better_than_shore =
         *config_guard.generator().limit() > *config_guard.shore_limit();
-    if !generator_is_better_than_shore {
+    let shore_available = shore_available();
+    if shore_available && !generator_is_better_than_shore {
         log::trace!("short circuting since generator limit is lower than shore limit");
         return Ok(());
     }
-    log::trace!("Handling SoC update");
+
+    log::trace!("Reading SoC update");
     let soc: f32 = value.parse()?;
     let low_bat = soc <= *config_guard.generator().auto_start_soc();
     let high_bat = soc >= *config_guard.generator().stop_charge_soc();
     drop(config_guard);
+
     log::trace!("Released config lock");
     let gen_on = matches!(gen.lock().await.state().await, Ok(GeneratorState::Running));
     let prevent_start = crate::web::prevent_start();
     log::trace!("soc = {soc}, low_bat = {low_bat}, high_bat = {high_bat}, gen_on = {gen_on}, prevent_start = {prevent_start}");
 
-    // TODO: and amps make sense
     if gen_on && high_bat {
         GENERATOR_WANTED.store(false, Ordering::Relaxed);
         turn_off(config, client, gen).await?;
@@ -160,5 +173,11 @@ pub(crate) enum CheckSocError {
     #[error("Failed to turn generator off. {0}")]
     GeneratorOff(GeneratorOffError),
     #[error("Failed to parse battery charge. {0}")]
+    ParseFloat(std::num::ParseFloatError),
+}
+
+#[derive(Debug, Error)]
+pub(crate) enum CheckShoreError {
+    #[error("Failed to parse 'connected' value. {0}")]
     ParseFloat(std::num::ParseFloatError),
 }

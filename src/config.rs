@@ -13,6 +13,7 @@ pub(crate) struct MqttCredentials {
 #[derive(Deserialize, Getters)]
 pub(crate) struct MqttTopics {
     current_limit: String,
+    shore_connected: String,
     soc: String,
 }
 

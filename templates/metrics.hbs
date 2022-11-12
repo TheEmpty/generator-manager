@@ -9,3 +9,7 @@ auto_shore_limit {{shore_limit}}
 # HELP generator_wanted If the generator is wanted by the SoC configuration.
 # TYPE generator_wanted gauge
 generator_wanted {{#if generator_wanted}}1{{else}}0{{/if}}
+
+# HELP shore_available If the shore power is available.
+# TYPE shore_available gauge
+shore_available {{#if shore_available}}1{{else}}0{{/if}}

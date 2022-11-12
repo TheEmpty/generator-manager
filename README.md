@@ -72,6 +72,7 @@ data:
         },
         "topics": {
             "current_limit": "{YOUR ID}/vebus/{VE BUS ID}/Ac/ActiveIn/CurrentLimit",
+            "shore_connected": "{YOUR ID}/vebus/{VE BUS ID}/Ac/ActiveIn/Connected",
             "soc": "{YOUR ID}/battery/{BATTERY ID}/Soc"
         }
     }
