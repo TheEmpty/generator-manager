@@ -23,7 +23,7 @@ use tokio::{sync::Mutex, task::JoinHandle};
 #[tokio::main]
 async fn main() {
     env_logger::init();
-    log::debug!(
+    log::info!(
         "Built v{} on {} compiled with {}.",
         env!("CARGO_PKG_VERSION"),
         env!("DATE_TIME"),
