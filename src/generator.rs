@@ -39,7 +39,8 @@ pub(crate) async fn check_soc(
     let generator_is_better_than_shore =
         *config_guard.generator().limit() > *config_guard.shore_limit();
     let shore_available = shore_available();
-    if shore_available && !generator_is_better_than_shore {
+    let gen_on = matches!(gen.lock().await.state().await, Ok(GeneratorState::Running));
+    if !gen_on && shore_available && !generator_is_better_than_shore {
         log::trace!("short circuting since generator limit is lower than shore limit");
         return Ok(());
     }
@@ -52,7 +53,6 @@ pub(crate) async fn check_soc(
     drop(config_guard);
 
     log::trace!("Released config lock");
-    let gen_on = matches!(gen.lock().await.state().await, Ok(GeneratorState::Running));
     log::trace!("soc = {soc}, low_battery = {low_battery}, battery_charged = {battery_charged}, gen_on = {gen_on}, prevent_start = {prevent_start}");
 
     let wanted = !gen_on && low_battery;
