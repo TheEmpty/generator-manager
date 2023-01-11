@@ -21,5 +21,5 @@ docker buildx build --builder ${BUILDX} -t ${TEST_REPO}/${USER}/${NAME} --push -
 kubectl rollout restart deployment/${NAME}
 say "deploying" || true
 sleep 90
-kubectl logs -l app=${NAME}
+kubectl logs -l app=${NAME} -f
 

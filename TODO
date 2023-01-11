@@ -1,0 +1,3 @@
+Some timeout values to config options
+Better shared state- the mutex stuff got ugly after some update (that pointed out issues).
+

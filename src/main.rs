@@ -3,19 +3,21 @@ mod error;
 mod generator;
 mod lci;
 mod mqtt;
+mod state;
 mod web;
 
 #[macro_use]
 extern crate rocket;
 
 use config::Config;
-use lci_gateway::{Generator, Tank};
+use lci_gateway::Tank;
 use mqtt::AcLimitError;
 use rumqttc::{
     mqttbytes::v4::Packet,
     AsyncClient,
     Event::{Incoming, Outgoing},
 };
+use state::State;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::{sync::Mutex, task::JoinHandle};
@@ -29,14 +31,12 @@ async fn main() {
         env!("DATE_TIME"),
         env!("RUSTC_VERSION")
     );
-    let config = Arc::new(Mutex::new(Config::load_from_arg()));
-    web::launch(config.clone()).await;
     let (generator, gas_tank) = lci::get_generator().await;
 
     // Threading stuff
     let gas_tank = Arc::new(gas_tank);
-    let generator = Arc::new(Mutex::new(generator));
-    let ac_input = Arc::new(Mutex::new(0f32));
+    let state = Arc::new(Mutex::new(State::new(generator, Config::load_from_arg())));
+
     let control_c = Arc::new(AtomicBool::new(false));
     let control_c_clone = control_c.clone();
     ctrlc::set_handler(move || {
@@ -45,19 +45,26 @@ async fn main() {
     })
     .expect("Error setting Ctrl-C handler");
 
+    web::launch(state.clone()).await;
+
+    // Only loops of MQTT fails
     loop {
         if control_c.load(Ordering::Relaxed) {
             break;
         }
 
         let (client, mut eventloop) = {
-            let config = config.lock().await;
-            mqtt::setup(&config).await
+            let state = state.lock().await;
+            log::trace!("Have state lock");
+            let result = mqtt::setup(state.config()).await;
+            drop(state); // explicit
+            log::trace!("Free'd state lock");
+            result
         };
         let client = Arc::new(Mutex::new(client));
         log::debug!("Starting eventloop poll");
 
-        let refresh_task = start_refresh_thread(config.clone(), client.clone());
+        let refresh_task = start_refresh_thread(state.clone(), client.clone());
 
         while let Ok(notification) = eventloop.poll().await {
             if control_c.load(Ordering::Relaxed) {
@@ -65,15 +72,12 @@ async fn main() {
             }
 
             // create clones here so ownership of a new arc can move instead of original.
-            let config = config.clone();
             let gas_tank = gas_tank.clone();
             let client = client.clone();
-            let generator = generator.clone();
-            let ac_input = ac_input.clone();
+            let state = state.clone();
             // Spawn in another thread so we don't miss eventloops like ping while waiting which may take minutes.
             tokio::spawn(async move {
-                handle_notification(config, client, generator, ac_input, gas_tank, notification)
-                    .await;
+                handle_notification(client, state, gas_tank, notification).await;
             });
         }
 
@@ -82,10 +86,8 @@ async fn main() {
 }
 
 async fn handle_notification(
-    config: Arc<Mutex<Config>>,
     client: Arc<Mutex<AsyncClient>>,
-    generator: Arc<Mutex<Generator>>,
-    ac_input: Arc<Mutex<f32>>,
+    state: Arc<Mutex<State>>,
     gas_tank: Arc<Tank>,
     notification: rumqttc::Event,
 ) {
@@ -112,23 +114,17 @@ async fn handle_notification(
 
             if topic == "soc" {
                 let value = value["value"].to_string();
-                if let Err(error) = generator::check_soc(
-                    config.clone(),
-                    client.clone(),
-                    value,
-                    generator.clone(),
-                    gas_tank,
-                )
-                .await
+                if let Err(error) =
+                    generator::check_soc(state.clone(), client.clone(), value, gas_tank).await
                 {
                     log::error!("Error while checking SoC, {}", error);
                 }
             } else if topic == "currentlimit" {
                 let value = value["value"].to_string();
                 if let Ok(val) = value.parse() {
-                    log::trace!("Updating ac_input from {val}");
-                    *ac_input.lock().await = round_to_half(val);
-                    log::trace!("Updated ac_input from {val}");
+                    log::trace!("Updating ac_input from {val} - needs state");
+                    state.lock().await.set_ac_limit(round_to_half(val));
+                    log::trace!("Updated ac_input from {val} - free'd state");
                 } else {
                     log::error!("Failed to parse {value} to f32");
                 }
@@ -139,8 +135,7 @@ async fn handle_notification(
                 }
             }
 
-            if let Err(error) = mqtt::check_current_limit(config, client, generator, ac_input).await
-            {
+            if let Err(error) = mqtt::check_current_limit(state, client).await {
                 log::error!("Error while checking current limit, {}", error);
             }
         }
@@ -153,7 +148,7 @@ async fn handle_notification(
 }
 
 fn start_refresh_thread(
-    config: Arc<Mutex<Config>>,
+    config: Arc<Mutex<State>>,
     client: Arc<Mutex<AsyncClient>>,
 ) -> JoinHandle<()> {
     tokio::spawn(async move {

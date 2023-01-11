@@ -1,5 +1,6 @@
-use crate::{config::Config, mqtt, mqtt::AcLimitError};
-use lci_gateway::{Generator, GeneratorState, Tank};
+use crate::state::State;
+use crate::{mqtt, mqtt::AcLimitError};
+use lci_gateway::{GeneratorState, Tank};
 use rumqttc::AsyncClient;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -26,66 +27,75 @@ pub(crate) fn check_shore_available(value: String) -> Result<(), CheckShoreError
 }
 
 pub(crate) async fn check_soc(
-    config: Arc<Mutex<Config>>,
+    state: Arc<Mutex<State>>,
     client: Arc<Mutex<AsyncClient>>,
     value: String,
-    gen: Arc<Mutex<Generator>>,
     gas_tank: Arc<Tank>,
 ) -> Result<(), CheckSocError> {
-    log::trace!("Locking on config");
-    let config_guard = config.clone();
-    let config_guard = config_guard.lock().await;
+    log::trace!("Trying to lock on state");
+    let state_guard = state.lock().await;
+    log::trace!("Locked state");
 
     let generator_is_better_than_shore =
-        *config_guard.generator().limit() > *config_guard.shore_limit();
+        *state_guard.config().generator().limit() > *state_guard.config().shore_limit();
     let shore_available = shore_available();
-    if shore_available && !generator_is_better_than_shore {
+    let gen_on = matches!(
+        state_guard.generator().state().await,
+        Ok(GeneratorState::Running)
+    );
+    if !gen_on && shore_available && !generator_is_better_than_shore {
         log::trace!("short circuting since generator limit is lower than shore limit");
         return Ok(());
     }
 
     log::trace!("Reading SoC update");
     let soc: f32 = value.parse()?;
-    let low_battery = soc <= *config_guard.generator().auto_start_soc();
-    let battery_charged = soc >= *config_guard.generator().stop_charge_soc();
-    let prevent_start = *config_guard.prevent_start();
-    drop(config_guard);
+    let low_battery = soc <= *state_guard.config().generator().auto_start_soc();
+    let battery_charged = soc >= *state_guard.config().generator().stop_charge_soc();
+    let prevent_start = *state_guard.config().prevent_start();
+    drop(state_guard);
 
     log::trace!("Released config lock");
-    let gen_on = matches!(gen.lock().await.state().await, Ok(GeneratorState::Running));
     log::trace!("soc = {soc}, low_battery = {low_battery}, battery_charged = {battery_charged}, gen_on = {gen_on}, prevent_start = {prevent_start}");
 
     let wanted = !gen_on && low_battery;
     GENERATOR_WANTED.store(wanted, Ordering::Relaxed);
     if wanted {
         if !prevent_start {
-            turn_on(config, client, gen, gas_tank).await?;
+            turn_on(state, client, gas_tank).await?;
         }
     } else if gen_on && battery_charged {
-        turn_off(config, client, gen).await?;
+        turn_off(state, client).await?;
     }
 
     Ok(())
 }
 
 async fn turn_off(
-    config: Arc<Mutex<Config>>,
+    state: Arc<Mutex<State>>,
     client: Arc<Mutex<AsyncClient>>,
-    gen: Arc<Mutex<Generator>>,
 ) -> Result<(), GeneratorOffError> {
     log::info!("Want to turn generator off");
-    let mut gen = gen.lock().await;
-    log::trace!("Locked generator");
-    let state = gen.state().await?;
-    if state != GeneratorState::Running {
-        return Err(GeneratorOffError::InvalidState(state));
+    let state_guard = state.clone();
+    let state_guard = state_guard.lock().await;
+    log::trace!("Have state lock");
+    let gen_state = state_guard.generator().state().await?;
+    if gen_state != GeneratorState::Running {
+        return Err(GeneratorOffError::InvalidState(gen_state));
     }
 
-    mqtt::set_ac_limit(config, client, 15f32).await?;
+    let desired = *state_guard.config().shore_limit();
+    log::trace!("Dropping state guard to call set_ac_limit");
+    drop(state_guard);
+    mqtt::set_ac_limit(state.clone(), client, desired).await?;
+    log::trace!("Getting lock again to send generator off");
+    let mut state_guard = state.lock().await;
     log::info!("Sending generator off");
-    gen.off().await?;
+    state_guard.generator_mut().off().await?;
+
+    // 180 = max time we want to wait, 3 minutes or 180 seconds.
     for _ in 0..180 {
-        let state = gen.state().await;
+        let state = state_guard.generator().state().await;
         if matches!(state, Ok(GeneratorState::Off)) {
             log::info!("Generator is off");
             break;
@@ -97,9 +107,8 @@ async fn turn_off(
 }
 
 async fn turn_on(
-    config: Arc<Mutex<Config>>,
+    state: Arc<Mutex<State>>,
     client: Arc<Mutex<AsyncClient>>,
-    gen: Arc<Mutex<Generator>>,
     gas_tank: Arc<Tank>,
 ) -> Result<(), GeneratorOnError> {
     log::info!("Generator is wanted. Checking conditions.");
@@ -110,12 +119,12 @@ async fn turn_on(
         }
     }
 
-    log::trace!("Attempting to take lock for generator as we have fuel.");
-    let mut gen = gen.lock().await;
-    log::trace!("Lock recieved for turning generator on.");
-    let state = gen.state().await?;
-    if state != GeneratorState::Off {
-        return Err(GeneratorOnError::InvalidState(state));
+    let mut state_guard = state.lock().await;
+    log::trace!("Have state lock");
+    let gen = state_guard.generator_mut();
+    let gen_state = gen.state().await?;
+    if gen_state != GeneratorState::Off {
+        return Err(GeneratorOnError::InvalidState(gen_state));
     }
 
     log::info!("Sending generator command to start.");
@@ -130,12 +139,16 @@ async fn turn_on(
         }
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
-    let state = gen.state().await?;
-    if state != GeneratorState::Running {
-        return Err(GeneratorOnError::FailedToTurnOn(state));
+    let gen_state = gen.state().await?;
+    if gen_state != GeneratorState::Running {
+        return Err(GeneratorOnError::FailedToTurnOn(gen_state));
     }
+    // TODO: config option for how long to wait
+    let desired = *state_guard.config().generator().limit();
+    drop(state_guard);
     tokio::time::sleep(std::time::Duration::from_secs(30)).await;
-    mqtt::set_ac_limit(config, client, 45.5).await?;
+
+    mqtt::set_ac_limit(state, client, desired).await?;
     Ok(())
 }
 

@@ -1,5 +1,5 @@
-use crate::config::Config;
-use lci_gateway::{Generator, GeneratorState};
+use crate::{config::Config, state::State};
+use lci_gateway::GeneratorState;
 use rumqttc::{AsyncClient, EventLoop, MqttOptions, QoS};
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,7 +41,7 @@ pub(crate) async fn setup(config: &Config) -> (AsyncClient, EventLoop) {
 }
 
 pub(crate) async fn set_ac_limit(
-    config: Arc<Mutex<Config>>,
+    state: Arc<Mutex<State>>,
     client: Arc<Mutex<AsyncClient>>,
     limit: f32,
 ) -> Result<(), AcLimitError> {
@@ -49,10 +49,12 @@ pub(crate) async fn set_ac_limit(
     let payload = format!("{{\"value\": {:.1}}}", limit);
     log::trace!("Sending ac limit payload = {payload}");
     log::trace!("Locking to get current_limit topic.");
-    let topic = format!("W/{}", config.lock().await.topics().current_limit());
-    client
-        .lock()
-        .await
+    let state_guard = state.lock().await;
+    let topic = format!("W/{}", state_guard.config().topics().current_limit());
+    drop(state_guard);
+    log::trace!("Dropped state lock. Locking on client.");
+    let client_guard = client.lock().await;
+    client_guard
         .publish(
             topic,
             QoS::AtLeastOnce,
@@ -60,25 +62,29 @@ pub(crate) async fn set_ac_limit(
             payload,
         )
         .await?;
-    log::trace!("Sent ac limit.");
+    drop(client_guard);
+    log::trace!("Sent ac limit. Dropped clent lock.");
     Ok(())
 }
 
 pub(crate) async fn refresh_topics(
-    config: Arc<Mutex<Config>>,
+    state: Arc<Mutex<State>>,
     client: Arc<Mutex<AsyncClient>>,
 ) -> Result<(), rumqttc::ClientError> {
-    log::trace!("Waiting for lock on config to get topics");
-    let current_limit_topic = format!("R/{}", config.lock().await.topics().current_limit());
-    let soc_topic = format!("R/{}", config.lock().await.topics().soc());
-    let shore_connected_topic = format!("R/{}", config.lock().await.topics().shore_connected());
+    log::trace!("Waiting for lock on state to get topics");
+    let state = state.lock().await;
+    let config = state.config();
+    let current_limit_topic = format!("R/{}", config.topics().current_limit());
+    let soc_topic = format!("R/{}", config.topics().soc());
+    let shore_connected_topic = format!("R/{}", config.topics().shore_connected());
     let topics = vec![current_limit_topic, soc_topic, shore_connected_topic];
-    log::trace!("Refreshing topics, {:?}", topics);
+    log::trace!("Refreshing topics, {:?}- freeing state", topics);
+    drop(state);
 
+    log::trace!("Locking client to send refresh topics");
+    let client_guard = client.lock().await;
     for topic in topics {
-        client
-            .lock()
-            .await
+        client_guard
             .publish(
                 topic,
                 QoS::AtLeastOnce,
@@ -87,40 +93,35 @@ pub(crate) async fn refresh_topics(
             )
             .await?;
     }
+    drop(client_guard);
 
-    log::trace!("All topics have been refreshed.");
+    log::trace!("Client lock dropped. All topics have been refreshed.");
     Ok(())
 }
 
 pub(crate) async fn check_current_limit(
-    config: Arc<Mutex<Config>>,
+    state: Arc<Mutex<State>>,
     client: Arc<Mutex<AsyncClient>>,
-    gen: Arc<Mutex<Generator>>,
-    ac_input: Arc<Mutex<f32>>,
 ) -> Result<(), AcLimitError> {
-    log::trace!(
-        "Waiting for lock on generator and ac_input to ensure state does not change during setting limit."
-    );
-    let gen = gen.lock().await;
-    let ac_input = ac_input.lock().await;
-    log::trace!("Received generator and ac_input lock in check_current_limit");
-    let config_guard = config.clone();
-    log::trace!("Taking config lock");
-    let config_guard = config_guard.lock().await;
-    let desired = match gen.state().await {
-        Ok(GeneratorState::Running) => Some(*config_guard.generator().limit()),
-        Ok(GeneratorState::Off) => Some(*config_guard.shore_limit()),
+    log::trace!("Waiting for state lock");
+    let state_guard = state.lock().await;
+    let config = state_guard.config();
+    log::trace!("Received state lock");
+    let desired = match state_guard.generator().state().await {
+        Ok(GeneratorState::Running) => Some(*config.generator().limit()),
+        Ok(GeneratorState::Off) => Some(*config.shore_limit()),
         Ok(GeneratorState::Priming) | Ok(GeneratorState::Starting) | Err(_) => None,
     };
-    log::trace!("Releasing config lock");
-    drop(config_guard);
 
+    let ac_input = *state_guard.ac_input();
     log::trace!("Desired AC limit = {:?}, actual = {ac_input}", desired);
+    log::trace!("Releasing lock");
+    drop(state_guard);
 
     if let Some(desired) = desired {
-        if *ac_input != desired {
+        if ac_input != desired {
             log::debug!("Setting ac limit to {desired}, was at {ac_input}");
-            set_ac_limit(config, client, desired).await?;
+            set_ac_limit(state, client, desired).await?;
         }
     }
     Ok(())
