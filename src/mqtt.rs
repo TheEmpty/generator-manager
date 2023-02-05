@@ -79,7 +79,6 @@ pub(crate) async fn set_ac_limit(
     Ok(())
 }
 
-// TODO: actually just need one
 pub(crate) async fn refresh_topics(
     state: Arc<Mutex<State>>,
     client: Arc<Mutex<AsyncClient>>,
@@ -87,28 +86,23 @@ pub(crate) async fn refresh_topics(
     log::trace!("Waiting for lock on state to get topics");
     let state = state.lock().await;
     let config = state.config();
-    let current_limit_topic = format!("R/{}", config.topics().current_limit());
-    let soc_topic = format!("R/{}", config.topics().soc());
-    let shore_connected_topic = format!("R/{}", config.topics().shore_connected());
-    let topics = vec![current_limit_topic, soc_topic, shore_connected_topic];
-    log::trace!("Refreshing topics, {:?}- freeing state", topics);
+    let some_topic = format!("R/{}", config.topics().current_limit());
+    log::trace!("Refreshing topics - freeing state");
     drop(state);
 
     log::trace!("Locking client to send refresh topics");
     let client_guard = client.lock().await;
-    for topic in topics {
-        client_guard
-            .publish(
-                topic,
-                QoS::AtLeastOnce,
-                false, // retain
-                "please",
-            )
-            .await?;
-    }
+    client_guard
+        .publish(
+            some_topic,
+            QoS::AtLeastOnce,
+            false, // retain
+            "please",
+        )
+        .await?;
     drop(client_guard);
 
-    log::trace!("Client lock dropped. All topics have been refreshed.");
+    log::trace!("Client lock dropped. Refresh request sent.");
     Ok(())
 }
 
