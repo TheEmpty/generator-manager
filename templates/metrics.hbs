@@ -1,6 +1,10 @@
-# HELP prevent_start If the generator override is applied. 1 if override is on, 0 if off.
+# HELP prevent_start DEPRECATED - migrate alarms to do_not_run_generator
 # TYPE prevent_start gauge
-prevent_start {{#if prevent_start}}1{{else}}0{{/if}}
+prevent_start {{#if do_not_run_generator}}1{{else}}0{{/if}}
+
+# HELP do_not_run_generator If the generator override is applied. 1 if override is on, 0 if off.
+# TYPE do_not_run_generator gauge
+do_not_run_generator {{#if do_not_run_generator}}1{{else}}0{{/if}}
 
 # HELP auto_shore_limit The current shore limit that generator_manager will set when the generator is off.
 # TYPE auto_shore_limit gauge

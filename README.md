@@ -65,7 +65,9 @@ data:
         "generator": {
             "limit": 45.5,
             "auto_start_soc": 30,
-            "stop_charge_soc": 80
+            "stop_charge_soc": 80,
+            "low_voltage": 12.1,
+            "low_voltage_charge_minutes": 60
         },
         "mqtt": {
             "host": "192.168.50.5",
@@ -76,7 +78,9 @@ data:
         "topics": {
             "current_limit": "{YOUR ID}/vebus/{VE BUS ID}/Ac/ActiveIn/CurrentLimit",
             "shore_connected": "{YOUR ID}/vebus/{VE BUS ID}/Ac/ActiveIn/Connected",
-            "soc": "{YOUR ID}/battery/{BATTERY ID}/Soc"
+            "battery_voltage": "{YOUR ID}/battery/{VE BUS ID}/Dc/0/Voltage",
+            "battery_power": "{YOUR ID}/battery/{VE BUS ID}/Dc/0/Power",
+            "soc": "{YOUR ID}/battery/{BATTERY ID}/Soc",
         }
     }
 ```

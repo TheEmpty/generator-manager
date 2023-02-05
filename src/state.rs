@@ -103,13 +103,15 @@ impl State {
         };
 
         let low_voltage = match self.last_voltage {
-            Some(voltage) => voltage <= 12.2,
+            Some(voltage) => voltage <= *self.config().generator().low_voltage(),
             None => false,
         };
 
         if low_voltage {
             log::warn!("LOW BATTERY VOLTAGE: starting timer");
-            self.set_timer(Duration::hours(1));
+            self.set_timer(Duration::minutes(
+                (*self.config().generator().low_voltage_charge_minutes()).into(),
+            ));
         }
 
         let generator_is_better_than_shore =
@@ -121,7 +123,7 @@ impl State {
 
         let charging_conditions = (low_battery || low_voltage || self.timer.is_some())
             && !already_charging
-            && !self.config().prevent_start()
+            && !self.config().do_not_run_generator()
             && !gen_on
             && (!self.shore_available || generator_is_better_than_shore);
         if charging_conditions {
@@ -132,7 +134,7 @@ impl State {
             return DesiredGeneratorState::On;
         }
 
-        if gen_on && self.we_turned_it_on && *self.config().prevent_start() {
+        if gen_on && self.we_turned_it_on && *self.config().do_not_run_generator() {
             log::warn!("Turning off since prevent start was triggered.");
             return DesiredGeneratorState::Off;
         }

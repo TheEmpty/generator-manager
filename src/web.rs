@@ -3,11 +3,11 @@ use rocket_dyn_templates::{context, Template};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-#[post("/prevent_start/<desire>")]
-async fn set_prevent_start(state: &State<Arc<Mutex<crate::State>>>, desire: bool) -> Value {
+#[post("/do_not_run_generator/<desire>")]
+async fn set_do_not_run_generator(state: &State<Arc<Mutex<crate::State>>>, desire: bool) -> Value {
     log::trace!("Taking state lock");
     let mut state = state.lock().await;
-    state.config_mut().set_prevent_start(desire);
+    state.config_mut().set_do_not_run_generator(desire);
     let save_result = state.config().save();
     if let Err(ref error) = save_result {
         log::debug!("{}", error);
@@ -16,7 +16,7 @@ async fn set_prevent_start(state: &State<Arc<Mutex<crate::State>>>, desire: bool
     drop(state);
     rocket::serde::json::json!({
         "succeGeneratorss": "true",
-        "prevent_start": desire,
+        "do_not_run_generator": desire,
         "saved": save_result.is_err(),
     })
 }
@@ -39,15 +39,15 @@ async fn set_shore_limit(state: &State<Arc<Mutex<crate::State>>>, new_limit: u8)
     })
 }
 
-#[get("/prevent_start")]
-async fn get_prevent_start(state: &State<Arc<Mutex<crate::State>>>) -> Value {
+#[get("/do_not_run_generator")]
+async fn get_do_not_run_generator(state: &State<Arc<Mutex<crate::State>>>) -> Value {
     log::trace!("Taking state lock");
     let state = state.lock().await;
-    let prevent_start = *state.config().prevent_start();
+    let do_not_run_generator = *state.config().do_not_run_generator();
     log::trace!("droping state lock");
     drop(state);
     rocket::serde::json::json!({
-        "prevent_start": prevent_start,
+        "do_not_run_generator": do_not_run_generator,
     })
 }
 
@@ -57,13 +57,13 @@ async fn metrics(state: &State<Arc<Mutex<crate::State>>>) -> Template {
     log::trace!("Taking state lock");
     let state = state.lock().await;
     let shore_limit = *state.config().shore_limit();
-    let prevent_start = *state.config().prevent_start();
+    let do_not_run_generator = *state.config().do_not_run_generator();
     log::trace!("droping state lock");
     drop(state);
     Template::render(
         "metrics",
         context! {
-            prevent_start: prevent_start,
+            do_not_run_generator: do_not_run_generator,
             generator_wanted: generator_wanted,
             shore_limit: shore_limit,
         },
@@ -75,13 +75,13 @@ async fn index(state: &State<Arc<Mutex<crate::State>>>) -> Template {
     log::trace!("Taking state lock");
     let state = state.lock().await;
     let shore_limit = *state.config().shore_limit();
-    let prevent_start = *state.config().prevent_start();
+    let do_not_run_generator = *state.config().do_not_run_generator();
     log::trace!("droping state lock");
     drop(state);
     Template::render(
         "index",
         context! {
-            prevent_start: prevent_start,
+            do_not_run_generator: do_not_run_generator,
             shore_limit: shore_limit
         },
     )
@@ -93,8 +93,8 @@ pub(crate) async fn launch(state: Arc<Mutex<crate::State>>) {
             "/",
             routes![
                 index,
-                set_prevent_start,
-                get_prevent_start,
+                set_do_not_run_generator,
+                get_do_not_run_generator,
                 set_shore_limit,
                 metrics
             ],

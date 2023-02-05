@@ -25,6 +25,8 @@ pub(crate) struct GeneratorConfig {
     limit: f32,
     auto_start_soc: f32,
     stop_charge_soc: f32,
+    low_voltage: f32,
+    low_voltage_charge_minutes: u16,
 }
 
 #[derive(Serialize, Deserialize, Getters)]
@@ -33,8 +35,8 @@ pub(crate) struct Config {
     mqtt: MqttCredentials,
     topics: MqttTopics,
     generator: GeneratorConfig,
-    #[serde(default)] // TODO: rename to something like "do not run"
-    prevent_start: bool,
+    #[serde(default)]
+    do_not_run_generator: bool,
 }
 
 fn get_config_path() -> String {
@@ -62,8 +64,8 @@ impl Config {
         self.shore_limit = new_shore_limit.into();
     }
 
-    pub(crate) fn set_prevent_start(&mut self, prevent_start: bool) {
-        self.prevent_start = prevent_start;
+    pub(crate) fn set_do_not_run_generator(&mut self, do_not_run_generator: bool) {
+        self.do_not_run_generator = do_not_run_generator;
     }
 
     pub(crate) fn save(&self) -> Result<(), SaveConfigError> {

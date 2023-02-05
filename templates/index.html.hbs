@@ -67,7 +67,7 @@
         window.override = function() {
             if(!disabled()) {
                 disable();
-                var url = '/prevent_start/' + !{{prevent_start}};
+                var url = '/do_not_run_generator/' + !{{do_not_run_generator}};
                 post(url);
             }
         }
@@ -85,14 +85,14 @@
 <body>
     <center>
         <h2>
-            {{#if prevent_start}}
+            {{#if do_not_run_generator}}
                 Generator currently NOT allowed.
             {{else}}
                 Generator currently allowed.
             {{/if}}
         </h2>
-        <div id="prevent-start" onclick="override()" class="generator-override-{{prevent_start}}">
-            {{#if prevent_start}}
+        <div id="prevent-start" onclick="override()" class="generator-override-{{do_not_run_generator}}">
+            {{#if do_not_run_generator}}
                 Allow Generator
             {{else}}
                 Disallow Generator
