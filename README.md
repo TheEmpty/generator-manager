@@ -8,6 +8,9 @@ This auto starts the generator when it's below "auto-start-soc" until it's "stop
 * You have a generator connected to your LCI system.
 * You have a Victron MQTT endpoint with a multiplus
 
+## Dev notes:
+Code is very messy right now. Needs a heavy rewrite/refactor- though it's one of those things that works even though it's messy.
+
 ## _You might also like_
 
 ### [LCI Gateway Exporter](https://github.com/TheEmpty/lci-gateway-exporter)

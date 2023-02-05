@@ -54,7 +54,6 @@ async fn get_prevent_start(state: &State<Arc<Mutex<crate::State>>>) -> Value {
 #[get("/metrics")]
 async fn metrics(state: &State<Arc<Mutex<crate::State>>>) -> Template {
     let generator_wanted = crate::generator::generator_wanted();
-    let shore_available = crate::generator::shore_available();
     log::trace!("Taking state lock");
     let state = state.lock().await;
     let shore_limit = *state.config().shore_limit();
@@ -67,7 +66,6 @@ async fn metrics(state: &State<Arc<Mutex<crate::State>>>) -> Template {
             prevent_start: prevent_start,
             generator_wanted: generator_wanted,
             shore_limit: shore_limit,
-            shore_available: shore_available,
         },
     )
 }

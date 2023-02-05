@@ -115,9 +115,24 @@ async fn handle_notification(
             if topic == "soc" {
                 let value = value["value"].to_string();
                 if let Err(error) =
-                    generator::check_soc(state.clone(), client.clone(), value, gas_tank).await
+                    generator::update_soc(state.clone(), client.clone(), value, gas_tank).await
                 {
                     log::error!("Error while checking SoC, {}", error);
+                }
+            } else if topic == "voltage" {
+                let value = value["value"].to_string();
+                if let Err(error) =
+                    generator::update_voltage(state.clone(), client.clone(), value, gas_tank).await
+                {
+                    log::error!("Error while checking voltage, {}", error);
+                }
+            } else if topic == "power" {
+                let value = value["value"].to_string();
+                if let Err(error) =
+                    generator::update_batt_wattage(state.clone(), client.clone(), value, gas_tank)
+                        .await
+                {
+                    log::error!("Error while checking power, {}", error);
                 }
             } else if topic == "currentlimit" {
                 let value = value["value"].to_string();
@@ -130,7 +145,7 @@ async fn handle_notification(
                 }
             } else if topic == "connected" {
                 let value = value["value"].to_string();
-                if let Err(error) = generator::check_shore_available(value) {
+                if let Err(error) = generator::check_shore_available(state.clone(), value).await {
                     log::error!("Error while updating shore connection state, {}", error);
                 }
             }

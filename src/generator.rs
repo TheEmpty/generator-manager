@@ -1,4 +1,4 @@
-use crate::state::State;
+use crate::state::{DesiredGeneratorState, State};
 use crate::{mqtt, mqtt::AcLimitError};
 use lci_gateway::{GeneratorState, Tank};
 use rumqttc::AsyncClient;
@@ -9,66 +9,103 @@ use std::sync::{
 use thiserror::Error;
 use tokio::sync::Mutex;
 
+// these should probably be in state
 static GENERATOR_WANTED: AtomicBool = AtomicBool::new(false);
-static SHORE_AVAILABLE: AtomicBool = AtomicBool::new(false);
 
 pub(crate) fn generator_wanted() -> bool {
     GENERATOR_WANTED.load(Ordering::Relaxed)
 }
 
-pub(crate) fn shore_available() -> bool {
-    SHORE_AVAILABLE.load(Ordering::Relaxed)
-}
-
-pub(crate) fn check_shore_available(value: String) -> Result<(), CheckShoreError> {
+pub(crate) async fn check_shore_available(
+    state: Arc<Mutex<State>>,
+    value: String,
+) -> Result<(), CheckShoreError> {
     let available: f32 = value.parse().map_err(CheckShoreError::ParseFloat)?;
-    SHORE_AVAILABLE.store(available != 0.0, Ordering::Relaxed);
+    let mut state_guard = state.lock().await;
+    state_guard.set_shore_availability(available != 0.0);
     Ok(())
 }
 
-pub(crate) async fn check_soc(
+pub(crate) async fn update_soc(
     state: Arc<Mutex<State>>,
     client: Arc<Mutex<AsyncClient>>,
     value: String,
     gas_tank: Arc<Tank>,
 ) -> Result<(), CheckSocError> {
     log::trace!("Trying to lock on state");
-    let state_guard = state.lock().await;
+    let mut state_guard = state.lock().await;
     log::trace!("Locked state");
-
-    let generator_is_better_than_shore =
-        *state_guard.config().generator().limit() > *state_guard.config().shore_limit();
-    let shore_available = shore_available();
-    let gen_on = matches!(
-        state_guard.generator().state().await,
-        Ok(GeneratorState::Running)
-    );
-    if !gen_on && shore_available && !generator_is_better_than_shore {
-        log::trace!("short circuting since generator limit is lower than shore limit");
-        return Ok(());
-    }
 
     log::trace!("Reading SoC update");
     let soc: f32 = value.parse()?;
-    let low_battery = soc <= *state_guard.config().generator().auto_start_soc();
-    let battery_charged = soc >= *state_guard.config().generator().stop_charge_soc();
-    let prevent_start = *state_guard.config().prevent_start();
+    state_guard.set_last_soc(soc);
+    drop(state_guard);
+    log::trace!("Released config lock");
+
+    check_generator_state(state, client, gas_tank).await;
+    Ok(())
+}
+
+pub(crate) async fn update_voltage(
+    state: Arc<Mutex<State>>,
+    client: Arc<Mutex<AsyncClient>>,
+    value: String,
+    gas_tank: Arc<Tank>,
+) -> Result<(), CheckSocError> {
+    log::trace!("Trying to lock on state");
+    let mut state_guard = state.lock().await;
+    log::trace!("Locked state");
+
+    log::trace!("Reading voltage update");
+    let soc: f32 = value.parse()?;
+    state_guard.set_last_voltage(soc);
+    drop(state_guard);
+    log::trace!("Released config lock");
+
+    check_generator_state(state, client, gas_tank).await;
+    Ok(())
+}
+
+pub(crate) async fn update_batt_wattage(
+    state: Arc<Mutex<State>>,
+    client: Arc<Mutex<AsyncClient>>,
+    value: String,
+    gas_tank: Arc<Tank>,
+) -> Result<(), CheckSocError> {
+    log::trace!("Trying to lock on state");
+    let mut state_guard = state.lock().await;
+    log::trace!("Locked state");
+
+    log::trace!("Reading batt wattage update");
+    let soc: f32 = value.parse()?;
+    state_guard.set_last_batt_wattage(soc);
+    drop(state_guard);
+    log::trace!("Released config lock");
+
+    check_generator_state(state, client, gas_tank).await;
+    Ok(())
+}
+
+async fn check_generator_state(
+    state: Arc<Mutex<State>>,
+    client: Arc<Mutex<AsyncClient>>,
+    gas_tank: Arc<Tank>,
+) {
+    log::trace!("Trying to lock on state");
+    let mut state_guard = state.lock().await;
+    log::trace!("Locked state");
+    let wanted = state_guard.wanted().await;
     drop(state_guard);
 
-    log::trace!("Released config lock");
-    log::trace!("soc = {soc}, low_battery = {low_battery}, battery_charged = {battery_charged}, gen_on = {gen_on}, prevent_start = {prevent_start}");
-
-    let wanted = !gen_on && low_battery;
-    GENERATOR_WANTED.store(wanted, Ordering::Relaxed);
-    if wanted {
-        if !prevent_start {
-            turn_on(state, client, gas_tank).await?;
+    match wanted {
+        DesiredGeneratorState::On => {
+            let _ = turn_on(state, client, gas_tank).await;
         }
-    } else if gen_on && battery_charged {
-        turn_off(state, client).await?;
+        DesiredGeneratorState::Off => {
+            let _ = turn_off(state, client).await;
+        }
+        DesiredGeneratorState::InDesiredState => {}
     }
-
-    Ok(())
 }
 
 async fn turn_off(
@@ -77,8 +114,9 @@ async fn turn_off(
 ) -> Result<(), GeneratorOffError> {
     log::info!("Want to turn generator off");
     let state_guard = state.clone();
-    let state_guard = state_guard.lock().await;
+    let mut state_guard = state_guard.lock().await;
     log::trace!("Have state lock");
+    state_guard.turned_off();
     let gen_state = state_guard.generator().state().await?;
     if gen_state != GeneratorState::Running {
         return Err(GeneratorOffError::InvalidState(gen_state));
@@ -121,6 +159,7 @@ async fn turn_on(
 
     let mut state_guard = state.lock().await;
     log::trace!("Have state lock");
+    state_guard.turned_on();
     let gen = state_guard.generator_mut();
     let gen_state = gen.state().await?;
     if gen_state != GeneratorState::Off {

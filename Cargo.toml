@@ -1,6 +1,6 @@
 [package]
 name = "generator-manager"
-version = "0.5.2"
+version = "0.6.0-BETA"
 edition = "2021"
 authors = ["Myles Empty Best"]
 
@@ -17,3 +17,4 @@ rocket = { version = "0.5.0-rc.2", features = ["json"] }
 rocket_dyn_templates = { version = "0.1.0-rc.2", features = ["handlebars"] }
 derive-getters = "0.2.0"
 ctrlc = "3.2.3"
+chrono = "0.4.23"

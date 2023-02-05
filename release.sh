@@ -12,7 +12,7 @@ cargo build --release
 
 USER="theempty"
 NAME="generator-manager"
-VERSION=$(sed -E -n 's/^version = "([0-9\.]+)"/\1/p' Cargo.toml)
+VERSION=$(sed -E -n 's/^version = "(.+)"/\1/p' Cargo.toml)
 BUILDX="pensive_albattani"
 PLATFORMS="linux/amd64"
 

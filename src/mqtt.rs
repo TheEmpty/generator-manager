@@ -21,6 +21,8 @@ pub(crate) async fn setup(config: &Config) -> (AsyncClient, EventLoop) {
     let soc_read_topic = format!("N/{}", config.topics().soc());
     let current_limit_read_topic = format!("N/{}", config.topics().current_limit());
     let shore_connected_read_topic = format!("N/{}", config.topics().shore_connected());
+    let battery_power_topic = format!("N/{}", config.topics().battery_power());
+    let battery_voltage_topic = format!("N/{}", config.topics().battery_voltage());
 
     client
         .subscribe(soc_read_topic, QoS::AtLeastOnce)
@@ -36,6 +38,16 @@ pub(crate) async fn setup(config: &Config) -> (AsyncClient, EventLoop) {
         .subscribe(shore_connected_read_topic, QoS::AtLeastOnce)
         .await
         .expect("Failed to subscribe to AC shore connected requested state");
+
+    client
+        .subscribe(battery_power_topic, QoS::AtLeastOnce)
+        .await
+        .expect("Failed to subscribe to battery power state");
+
+    client
+        .subscribe(battery_voltage_topic, QoS::AtLeastOnce)
+        .await
+        .expect("Failed to subscribe to battery voltage connected state");
 
     (client, eventloop)
 }
@@ -67,6 +79,7 @@ pub(crate) async fn set_ac_limit(
     Ok(())
 }
 
+// TODO: actually just need one
 pub(crate) async fn refresh_topics(
     state: Arc<Mutex<State>>,
     client: Arc<Mutex<AsyncClient>>,

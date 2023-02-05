@@ -14,6 +14,8 @@
     "topics": {
       "current_limit": "{YOUR ID}/vebus/{VE BUS ID}/Ac/ActiveIn/CurrentLimit",
       "shore_connected": "{YOUR ID}/vebus/{VE BUS ID}/Ac/ActiveIn/Connected",
+      "battery_voltage": "{.}/battery/{.}/Dc/0/Voltage",
+      "battery_power": "{.}/battery/{.}/Dc/0/Power",
       "soc": "+/battery/+/Soc"
     }
 }

@@ -8,6 +8,7 @@ RUN apk add --no-cache ${BUILD_PACKAGES} ${DEP_PACKAGES}
 # Code
 RUN mkdir -p /code
 COPY Cargo.toml /code/.
+COPY Cargo.lock /code/.
 COPY src /code/src
 COPY templates /templates
 

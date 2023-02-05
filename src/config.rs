@@ -16,6 +16,8 @@ pub(crate) struct MqttTopics {
     current_limit: String,
     shore_connected: String,
     soc: String,
+    battery_voltage: String,
+    battery_power: String,
 }
 
 #[derive(Serialize, Deserialize, Getters)]
@@ -31,7 +33,7 @@ pub(crate) struct Config {
     mqtt: MqttCredentials,
     topics: MqttTopics,
     generator: GeneratorConfig,
-    #[serde(default)]
+    #[serde(default)] // TODO: rename to something like "do not run"
     prevent_start: bool,
 }
 

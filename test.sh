@@ -13,13 +13,9 @@ cargo build --release
 
 USER="theempty"
 NAME="generator-manager"
-TEST_REPO="192.168.7.7:5000"
+TEST_REPO="192.168.50.3:5000"
 BUILDX="pensive_albattani"
 PLATFORMS="linux/amd64"
 
 docker buildx build --builder ${BUILDX} -t ${TEST_REPO}/${USER}/${NAME} --push --platform=${PLATFORMS} .
-kubectl rollout restart deployment/${NAME}
-say "deploying" || true
-sleep 90
-kubectl logs -l app=${NAME} -f
 
