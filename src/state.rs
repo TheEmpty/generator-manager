@@ -85,7 +85,7 @@ impl State {
     pub(crate) async fn wanted(&mut self) -> DesiredGeneratorState {
         if let Some(end_time) = self.timer {
             if end_time <= Utc::now() {
-                log::trace!("Removing timer.");
+                log::debug!("Removing timer.");
                 self.timer = None;
             }
         }
@@ -93,7 +93,7 @@ impl State {
         // Manually turned off
         let gen_on = matches!(self.generator().state().await, Ok(GeneratorState::Running));
         if !gen_on && self.we_turned_it_on {
-            log::trace!("Appears to have been manually turned off.");
+            log::debug!("Appears to have been manually turned off.");
             self.we_turned_it_on = false;
         }
 
@@ -147,7 +147,7 @@ impl State {
         let off_conditions =
             gen_on && self.we_turned_it_on && battery_charged_soc && self.timer.is_none();
         if off_conditions {
-            log::trace!("All off conditions met. Going back to the battery!");
+            log::debug!("All off conditions met. Going back to the battery!");
             return DesiredGeneratorState::Off;
         }
 
