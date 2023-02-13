@@ -50,6 +50,7 @@ async fn main() {
     // Only loops of MQTT fails
     loop {
         if control_c.load(Ordering::Relaxed) {
+            log::debug!("Preventing connection due to sigterm.");
             break;
         }
 
@@ -68,6 +69,7 @@ async fn main() {
 
         while let Ok(notification) = eventloop.poll().await {
             if control_c.load(Ordering::Relaxed) {
+                log::debug!("Shutting down due to signal.");
                 break;
             }
 
@@ -81,8 +83,10 @@ async fn main() {
             });
         }
 
+        log::debug!("Connection lost with MQTT, re-establishing.");
         refresh_task.abort();
     }
+    log::info!("Shutdown complete");
 }
 
 async fn handle_notification(

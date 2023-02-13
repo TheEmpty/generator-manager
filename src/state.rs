@@ -107,7 +107,7 @@ impl State {
             None => false,
         };
 
-        if low_voltage {
+        if low_voltage && self.timer.is_none() {
             log::warn!("LOW BATTERY VOLTAGE: starting timer");
             self.set_timer(Duration::minutes(
                 (*self.config().generator().low_voltage_charge_minutes()).into(),
@@ -116,16 +116,16 @@ impl State {
 
         let generator_is_better_than_shore =
             self.config().generator().limit() > self.config().shore_limit();
+        let generator_is_better_than_shore = self.shore_available && generator_is_better_than_shore;
         let already_charging = match self.last_batt_wattage {
             Some(x) => x > 0f32,
             None => false,
         };
-
         let charging_conditions = (low_battery || low_voltage || self.timer.is_some())
             && !already_charging
             && !self.config().do_not_run_generator()
             && !gen_on
-            && (!self.shore_available || generator_is_better_than_shore);
+            && !generator_is_better_than_shore;
         if charging_conditions {
             log::debug!(
                 "low_battery = {low_battery}, low_voltage = {low_voltage}, timer = {:?}",
@@ -149,6 +149,13 @@ impl State {
         if off_conditions {
             log::debug!("All off conditions met. Going back to the battery!");
             return DesiredGeneratorState::Off;
+        } else if gen_on {
+            log::trace!(
+                "Generator still desired, we_turned_it_on = {}, charged = {}, timer = {:?}",
+                self.we_turned_it_on,
+                battery_charged_soc,
+                self.timer
+            );
         }
 
         DesiredGeneratorState::InDesiredState

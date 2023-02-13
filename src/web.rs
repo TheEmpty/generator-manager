@@ -1,3 +1,4 @@
+use chrono::prelude::Utc;
 use rocket::{serde::json::Value, State};
 use rocket_dyn_templates::{context, Template};
 use std::sync::Arc;
@@ -57,6 +58,11 @@ async fn metrics(state: &State<Arc<Mutex<crate::State>>>) -> Template {
     log::trace!("Taking state lock");
     let state = state.lock().await;
     let shore_limit = *state.config().shore_limit();
+    let we_turned_it_on = *state.we_turned_it_on();
+    let timer = state
+        .timer()
+        .map(|end_time| (Utc::now() - end_time).num_seconds())
+        .unwrap_or_default();
     let do_not_run_generator = *state.config().do_not_run_generator();
     log::trace!("droping state lock");
     drop(state);
@@ -66,6 +72,8 @@ async fn metrics(state: &State<Arc<Mutex<crate::State>>>) -> Template {
             do_not_run_generator: do_not_run_generator,
             generator_wanted: generator_wanted,
             shore_limit: shore_limit,
+            we_turned_it_on: we_turned_it_on,
+            generator_on_timer_seconds: timer,
         },
     )
 }
