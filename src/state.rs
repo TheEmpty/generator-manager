@@ -95,6 +95,7 @@ impl State {
         if !gen_on && self.we_turned_it_on {
             log::debug!("Appears to have been manually turned off.");
             self.we_turned_it_on = false;
+            self.timer = None;
         }
 
         let low_battery = match self.last_soc {
