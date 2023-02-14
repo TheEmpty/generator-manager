@@ -61,7 +61,7 @@ async fn metrics(state: &State<Arc<Mutex<crate::State>>>) -> Template {
     let we_turned_it_on = *state.we_turned_it_on();
     let timer = state
         .timer()
-        .map(|end_time| (Utc::now() - end_time).num_seconds())
+        .map(|end_time| (end_time - Utc::now()).num_seconds())
         .unwrap_or_default();
     let do_not_run_generator = *state.config().do_not_run_generator();
     log::trace!("droping state lock");
