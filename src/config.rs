@@ -60,8 +60,8 @@ impl Config {
         serde_json::from_reader(config_reader).expect("Error reading configuration.")
     }
 
-    pub(crate) fn set_shore_limit(&mut self, new_shore_limit: u8) {
-        self.shore_limit = new_shore_limit.into();
+    pub(crate) fn set_shore_limit(&mut self, new_shore_limit: f32) {
+        self.shore_limit = new_shore_limit;
     }
 
     pub(crate) fn set_do_not_run_generator(&mut self, do_not_run_generator: bool) {

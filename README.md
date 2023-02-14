@@ -65,9 +65,9 @@ data:
         "generator": {
             "limit": 45.5,
             "auto_start_soc": 30,
-            "stop_charge_soc": 80,
+            "stop_charge_soc": 60,
             "low_voltage": 12.1,
-            "low_voltage_charge_minutes": 60
+            "low_voltage_charge_minutes": 30
         },
         "mqtt": {
             "host": "192.168.50.5",

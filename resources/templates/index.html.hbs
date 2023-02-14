@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="/static/normalize.css">
+    <link rel="stylesheet" href="/static/site.css">
+    <script src="/static/site.js"></script> 
+    <title>Generator Manager</title>
+</head>
+<body>
+<div id="container">
+    {{#if do_not_run_generator}}
+        <div class="card">
+            <div class="card-title">
+                Resume Management
+            </div>
+            Generator Manager is currently <b><u>NOT</u></b> allowed to start the generator.<br>
+            <input id="resume-management" type="button" value="resume management" onclick="resumeManagement()">
+        </div>
+    {{else}}
+        <div class="card">
+            <div class="card-title">
+                Pause Management
+            </div>
+            Generator Manager is currently allowed to start the generator.<br>
+            <input id="pause-management" type="button" value="pause management" onclick="pauseManagement()">
+        </div>
+    {{/if}}
+
+    <div class="card">
+        <div class="card-title">
+            Shore Limit
+        </div>
+        Shore limit is currently {{shore_limit}}A.<br>
+        Update to <input id="amps" type="number" value="{{shore_limit}}" step="0.5">A<br>
+        <input id="update-shore" type="button" value="update" onclick="updateShore()">
+    </div>
+
+    {{#if timer}}
+        <div class="card">
+            <div class="card-title">
+                Timer
+            </div>
+            Current timer has about {{timer}} minutes left.<br>
+            <br>
+            Re-set to <input id="timer" type="number" value="{{timer}}" step="1"> minutes<br>
+            <input id="set-timer" type="button" value="re-set timer" onclick="setTimer()">
+        </div>
+    {{else}}
+        <div class="card">
+            <div class="card-title">
+                Timer
+            </div>
+            Timer is not set.<br>
+            Set to <input id="timer" type="number" value="60" step="1"> minutes<br>
+            <input id="set-timer" type="button" value="start timer" onclick="setTimer()">
+        </div>
+    {{/if}}
+
+    {{#if generator_on}}
+        {{#if we_turned_it_on}}
+            <div class="card">
+                <div class="card-title">
+                    Generator Status
+                </div>
+                The generator is currently on and being managed.
+            </div>
+        {{else}}
+            <div class="card">
+                <div class="card-title">
+                    Generator Status
+                </div>
+                The generator is currently on, but generator manager did not turn it on. Generator Manager will not monitor for when to turn it off.<br>
+                <input id="override-we-turned-it-on" type="button" value="manage it anyway" onclick="overrideWeTurnedItOn()">
+            </div>
+        {{/if}}
+    {{else}}
+        <div class="card">
+            <div class="card-title">
+                Generator Status
+            </div>
+            The generator is currently off.
+        </div>
+    {{/if}}
+
+    
+    <div class="card">
+        <div class="card-title">
+            Configuration
+        </div>
+        Generator provides: {{generator_limit}}A<br>
+        Low voltage: {{low_voltage}}v<br>
+        Low voltage timer: {{low_voltage_charge_minutes}}m<br>
+        Start charging: {{auto_start_soc}}%<br>
+        Stop charging: {{stop_charge_soc}}%<br>
+        <br>
+        <div id="build">{{build}}</div>
+    </div>
+</div>
+</body>
