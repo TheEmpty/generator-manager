@@ -634,7 +634,7 @@ dependencies = [
 
 [[package]]
 name = "generator-manager"
-version = "0.6.0-BETA"
+version = "0.6.0"
 dependencies = [
  "chrono",
  "ctrlc",
