@@ -69,3 +69,16 @@ window.overrideWeTurnedItOn = function() {
         post('/api/v1/manage/true');
     }
 }
+
+window.onload = function() {
+    var element = document.getElementById("timer-left");
+    if(element) {
+        setInterval(function() {
+            element.innerHTML = (element.innerHTML - 1);
+            if (element.innerHTML == 0) {
+                disable();
+                window.location = window.location;
+            }
+        }, 1000 * 60);
+    }
+};

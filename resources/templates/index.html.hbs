@@ -23,7 +23,7 @@
             <div class="card-title">
                 Pause Management
             </div>
-            Generator Manager is currently allowed to start the generator.<br>
+            Generator Manager is currently allowed to start and stop the generator.<br>
             <input id="pause-management" type="button" value="pause management" onclick="pauseManagement()">
         </div>
     {{/if}}
@@ -42,7 +42,7 @@
             <div class="card-title">
                 Timer
             </div>
-            Current timer has about {{timer}} minutes left.<br>
+            Current timer has about <div id="timer-left">{{timer}}</div> minutes left.<br>
             <br>
             Re-set to <input id="timer" type="number" value="{{timer}}" step="1"> minutes<br>
             <input id="set-timer" type="button" value="re-set timer" onclick="setTimer()">
