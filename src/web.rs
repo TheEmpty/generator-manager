@@ -129,6 +129,10 @@ async fn index(state: &State<Arc<Mutex<crate::State>>>) -> Template {
     let low_voltage_charge_minutes = *state.config().generator().low_voltage_charge_minutes();
     let auto_start_soc = *state.config().generator().auto_start_soc();
     let stop_charge_soc = *state.config().generator().stop_charge_soc();
+    let current_soc = match *state.last_soc() {
+        Some(x) => format!("{x:.1}%"),
+        None => "Unknown".to_string(),
+    };
 
     log::trace!("droping state lock");
     drop(state);
@@ -155,6 +159,7 @@ async fn index(state: &State<Arc<Mutex<crate::State>>>) -> Template {
             low_voltage_charge_minutes: low_voltage_charge_minutes,
             auto_start_soc: auto_start_soc,
             stop_charge_soc: stop_charge_soc,
+            current_soc: current_soc,
             build: format!("On build v{} compiled with {} on {}.",
             env!("CARGO_PKG_VERSION"),
             env!("RUSTC_VERSION"),
